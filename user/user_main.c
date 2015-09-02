@@ -23,6 +23,7 @@
 
 static struct espconn serverConn;
 static esp_tcp serverTcp;
+static os_timer_t ostimer;
 
 
 #define MAXCLIENT	3
@@ -94,14 +95,10 @@ led_set(int led0, int led1, int led2, int led3)
 }
 
 void
-netout(void *cookie, char *buf, unsigned int len)
+timerhandler(void *arg)
 {
-	struct client *client;
-	char *p;
-	unsigned int l;
-	sint8 rc;
-
-	client = (struct client *)cookie;
+	static int timercount = 0;
+	timercount++;
 
 	switch (ledcount++ % 6) {
 	case 0:
@@ -126,6 +123,17 @@ netout(void *cookie, char *buf, unsigned int len)
 		led_set(0, 0, 0, 0);
 		break;
 	}
+}
+
+void
+netout(void *cookie, char *buf, unsigned int len)
+{
+	struct client *client;
+	char *p;
+	unsigned int l;
+	sint8 rc;
+
+	client = (struct client *)cookie;
 
 	fifo_write(&client->fifo_net, buf, len);
 	if (client->fifo_net_sending == 0) {
@@ -155,10 +163,8 @@ recvTask(os_event_t *events)
 			for (i = 0; i < MAXCLIENT; i++) {
 				if (clients[i].espconn != NULL) {
 					netout(&clients[i], uartbuffer, length);
-					ledcount--;
 				}
 			}
-			ledcount++;
 	}
 
 	if(UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
@@ -236,7 +242,7 @@ serverConnectCb(void *arg)
 		espconn_regist_sentcb(espconn, serverSentCb);
 	}
 
-	syslog_send(LOG_DAEMON, LOG_INFO, "connect from %d.%d.%d.%d",
+	syslog_send(LOG_DAEMON|LOG_INFO, "telnet: connection from %d.%d.%d.%d",
 	    espconn->proto.tcp->remote_ip[0],
 	    espconn->proto.tcp->remote_ip[1],
 	    espconn->proto.tcp->remote_ip[2],
@@ -317,28 +323,51 @@ wifi_callback(System_Event_t *evt)
 		break;
 
 	case EVENT_STAMODE_GOT_IP:
+#if 1
 		printf("#IP:" IPSTR ",MASK:" IPSTR ",GW:" IPSTR,
 		    IP2STR(&evt->event_info.got_ip.ip),
 		    IP2STR(&evt->event_info.got_ip.mask),
 		    IP2STR(&evt->event_info.got_ip.gw));
 		printf("\n");
+#endif
 
-		syslog_send(LOG_DAEMON, LOG_INFO, "boot address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR,
+#if 1
+		printf("boot chip_id=0x%08x, ver=%d, flash=%d, Mhz=%d, free=%d, address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR "\n",
+		    system_get_chip_id(),
+		    system_get_boot_version(),
+		    system_get_flash_size_map(),
+		    system_get_cpu_freq(),
+		    system_get_free_heap_size(),
+		    IP2STR(&evt->event_info.got_ip.ip),
+		    IP2STR(&evt->event_info.got_ip.mask),
+		    IP2STR(&evt->event_info.got_ip.gw));
+#endif
+
+		syslog_send(LOG_DAEMON|LOG_INFO, "boot: chip_id=0x%08x, ver=0x%x, flash=%d, Mhz=%d, free=%d",
+		    system_get_chip_id(),
+		    system_get_boot_version(),
+		    system_get_flash_size_map(),
+		    system_get_cpu_freq(),
+		    system_get_free_heap_size());
+
+		syslog_send(LOG_DAEMON|LOG_INFO, "boot: address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR,
 		    IP2STR(&evt->event_info.got_ip.ip),
 		    IP2STR(&evt->event_info.got_ip.mask),
 		    IP2STR(&evt->event_info.got_ip.gw));
 		break;
 
 	default:
+#if 0
 		printf("#wifi_callback: unknown event: %d\n", evt->event);
+#endif
+		syslog_send(LOG_DAEMON|LOG_DEBUG, "debug: wifi_callback: unknown event: %d", evt->event);
+
 		break;
 	}
 }
 
 // UartDev is defined and initialized in rom code.
 extern UartDevice UartDev;
-
-char buf[16];
 
 void
 user_init(void)
@@ -366,7 +395,7 @@ user_init(void)
 	gpio_output_set(BIT5, 0, BIT5, 0);
 	gpio16_output_set(0);
 
-	wifi_station_set_hostname("esp8266-ryo");
+	wifi_station_set_hostname(MYNAME);
 	wifi_set_opmode_current(STATION_MODE);
 
 	config.bssid_set = 0;
@@ -375,8 +404,24 @@ user_init(void)
 	wifi_station_set_config(&config);
 	wifi_set_event_handler_cb(wifi_callback);
 
+	sntp_set_timezone(TIMEZONE);
+	sntp_setservername(0, SNTP_SERVER0);
+#ifdef SNTP_SERVER1
+	sntp_setservername(1, SNTP_SERVER1);
+#endif
+#ifdef SNTP_SERVER2
+	sntp_setservername(2, SNTP_SERVER2);
+#endif
+	sntp_init();
+
+
 	server_init(23);
-	syslog_init(SYSLOG_SERVER);
+	syslog_init(SYSLOG_SERVER, MYNAME);
+
+
+	os_timer_disarm(&ostimer);
+	os_timer_setfn(&ostimer, timerhandler, NULL);
+	os_timer_arm(&ostimer, 50, 1);
 
 	system_os_task(recvTask, recvTaskPrio, recvTaskQueue, recvTaskQueueLen);
 }

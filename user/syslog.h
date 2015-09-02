@@ -36,7 +36,7 @@
 #define __printflike(fmtarg, firstvararg)	\
 	__attribute__((__format__ (__printf__, fmtarg, firstvararg)))
 
-void syslog_init(const char *);
-void syslog_send(int, int, const char *, ...) __printflike(3, 4);
+void syslog_init(const char *, const char *);
+void syslog_send(int, const char *, ...) __printflike(2, 3);
 
 #endif /* _SYSLOG_H_ */
