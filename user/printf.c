@@ -102,7 +102,7 @@ static void kdoprnt(int (*)(int), const char *, va_list);
 
 const char hexdigits[16] = "0123456789abcdef";
 
-static void
+static void ICACHE_FLASH_ATTR
 kdoprnt(int (*put)(int), const char *fmt, va_list ap)
 {
 	char *p;
@@ -235,7 +235,7 @@ reswitch:
 	}
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
 kprintn(int (*put)(int), unsigned long long ul, int base, int lflag, int width)
 #else
@@ -284,14 +284,14 @@ kprintn(int (*put)(int), unsigned long long ul, int base)
 
 int putchar(int);
 
-int
+int ICACHE_FLASH_ATTR
 vprintf(const char *fmt, va_list ap)
 {
 	kdoprnt(putchar, fmt, ap);
 	return 0;	/* XXX */
 }
 
-int
+int ICACHE_FLASH_ATTR
 printf(const char *fmt, ...)
 {
 	int rc;
@@ -305,7 +305,7 @@ printf(const char *fmt, ...)
 }
 
 #undef putchar
-int
+int ICACHE_FLASH_ATTR
 putchar(int c)
 {
 	if (c == '\n')
@@ -314,7 +314,7 @@ putchar(int c)
 	return 0;
 }
 
-int
+int ICACHE_FLASH_ATTR
 puts(const char *str)
 {
 	while (*str != '\0')

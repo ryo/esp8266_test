@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <string.h>
+#include "c_types.h"
 #include "fifo.h"
 
 #undef FIFO_DEBUG
 
 #ifdef FIFO_DEBUG
-static void
+static void ICACHE_FLASH_ATTR
 fifo_dump(struct fifo *fifo)
 {
 	unsigned int i;
@@ -25,13 +26,13 @@ fifo_dump(struct fifo *fifo)
 }
 #endif
 
-void
+void ICACHE_FLASH_ATTR
 fifo_init(struct fifo *fifo)
 {
 	memset(fifo, 0, sizeof(*fifo));
 }
 
-int
+int ICACHE_FLASH_ATTR
 fifo_putc(struct fifo *fifo, char c)
 {
 	if (fifo->len >= FIFO_BUFSIZE)
@@ -44,7 +45,7 @@ fifo_putc(struct fifo *fifo, char c)
 	return 1;
 }
 
-int
+int ICACHE_FLASH_ATTR
 fifo_getc(struct fifo *fifo)
 {
 	int c;
@@ -66,7 +67,7 @@ fifo_getc(struct fifo *fifo)
 	return c;
 }
 
-int
+int ICACHE_FLASH_ATTR
 fifo_write(struct fifo *fifo, char *buf, unsigned int len)
 {
 	unsigned int left, i;
@@ -81,7 +82,7 @@ fifo_write(struct fifo *fifo, char *buf, unsigned int len)
 	return len;
 }
 
-int
+int ICACHE_FLASH_ATTR
 fifo_read(struct fifo *fifo, char *buf, unsigned int len)
 {
 	unsigned int fifolen, i;
@@ -96,7 +97,7 @@ fifo_read(struct fifo *fifo, char *buf, unsigned int len)
 	return len;
 }
 
-char *
+char * ICACHE_FLASH_ATTR
 fifo_getpkt(struct fifo *fifo, unsigned int *lenp)
 {
 	unsigned int r;

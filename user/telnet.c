@@ -35,6 +35,8 @@
 #endif
 #include "telnet.h"
 
+#include "c_types.h"
+
 
 static void send_do(void *, int, int);
 static void send_dont(void *, int, int);
@@ -55,14 +57,14 @@ static void send_wont(void *, int, int);
 //static int telnet_state = TS_DATA;
 
 
-void
+void ICACHE_FLASH_ATTR
 telnet_init(struct telnet *telnet)
 {
 	telnet->telopt_sent = 0;
 	telnet->telnet_state = TS_DATA;
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 telnet_init_once(struct telnet *telnet ,void *cookie)
 {
 	if (telnet->telopt_sent == 0) {
@@ -72,7 +74,7 @@ telnet_init_once(struct telnet *telnet ,void *cookie)
 	}
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 send_do(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, DO };
@@ -88,7 +90,7 @@ send_do(void *cookie, int option, int init)
 #endif
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 send_dont(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, DONT };
@@ -104,7 +106,7 @@ send_dont(void *cookie, int option, int init)
 #endif
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 send_will(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, WILL };
@@ -120,7 +122,7 @@ send_will(void *cookie, int option, int init)
 #endif
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 send_wont(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, WONT };
@@ -136,44 +138,44 @@ send_wont(void *cookie, int option, int init)
 #endif
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 interrupt(void)
 {
 	/* nothong */
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 sendbrk(void)
 {
 	/* nothong */
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 recv_ayt(void *cookie)
 {
 	netout(cookie, "\r\n[Yes]\r\n", 9);
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 abort_output(void)
 {
 	/* nothong */
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 erase_character(void)
 {
 	/* as 0x7f? */
 	/* nothong */
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 erase_line(void)
 {
 	/* nothing */
 }
 
-static void
+static void ICACHE_FLASH_ATTR
 urgent_data(void)
 {
 	/* nothong */
@@ -187,7 +189,7 @@ const char *strstate[] = {
 
 #define	TELNET_INPUT(c)		putchar(c)
 
-void
+void ICACHE_FLASH_ATTR
 telnet_recv(struct telnet *telnet, void *cookie, char *buf, unsigned int len)
 {
 	int c;

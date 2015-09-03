@@ -17,14 +17,25 @@
 
 #undef NETDEBUG
 
+#undef USE_SNTP
+#undef USE_SYSLOG
+#undef USE_TIMER
+
+#ifndef USE_SYSLOG
+#define syslog_init(x, y)
+#define syslog_send(...)
+#endif
+
+
 #define MAX_CONN	4
 #define MAX_TXBUFFER	1024
 #define SERVER_TIMEOUT	300
 
 static struct espconn serverConn;
 static esp_tcp serverTcp;
-static os_timer_t ostimer;
 
+#define	HZ	20
+static os_timer_t tick_timer;
 
 #define MAXCLIENT	3
 struct client {
@@ -64,7 +75,23 @@ os_event_t recvTaskQueue[recvTaskQueueLen];
 static uint8 uartbuffer[MAX_UARTBUFFER];
 
 
-static void
+static void ICACHE_FLASH_ATTR
+photorelay_ctrl(int sw, int onoff)
+{
+	if (sw) {
+		if (onoff)
+			gpio_output_set(BIT4, 0, BIT4, 0);
+		else
+			gpio_output_set(0, BIT4, 0, BIT4);
+	} else {
+		if (onoff)
+			gpio_output_set(BIT5, 0, BIT5, 0);
+		else
+			gpio_output_set(0, BIT5, 0, BIT5);
+	}
+}
+
+static void ICACHE_FLASH_ATTR
 led_set(int led0, int led1, int led2, int led3)
 {
 	if (led0)
@@ -77,30 +104,24 @@ led_set(int led0, int led1, int led2, int led3)
 	else
 		gpio_output_set(0, BIT12, BIT12, 0);
 
-	if (led2) {
+	if (led2)
 		gpio_output_set(BIT13, 0, BIT13, 0);
-		gpio_output_set(BIT4, 0, BIT4, 0);
-	} else {
+	else
 		gpio_output_set(0, BIT13, BIT13, 0);
-		gpio_output_set(0, BIT4, 0, BIT4);
-	}
 
-	if (led3) {
+	if (led3)
 		gpio16_output_set(1);
-		gpio_output_set(BIT5, 0, BIT5, 0);
-	} else {
+	else
 		gpio16_output_set(0);
-		gpio_output_set(0, BIT5, 0, BIT5);
-	}
 }
 
-void
-timerhandler(void *arg)
+void ICACHE_FLASH_ATTR
+led_update(void)
 {
-	static int timercount = 0;
-	timercount++;
+	if (++ledcount >= 6)
+		ledcount = 0;
 
-	switch (ledcount++ % 6) {
+	switch (ledcount) {
 	case 0:
 		led_set(0, 0, 0, 1);
 		break;
@@ -125,7 +146,13 @@ timerhandler(void *arg)
 	}
 }
 
-void
+void ICACHE_FLASH_ATTR
+timerhandler(void *arg)
+{
+	led_update();
+}
+
+void ICACHE_FLASH_ATTR
 netout(void *cookie, char *buf, unsigned int len)
 {
 	struct client *client;
@@ -147,7 +174,6 @@ netout(void *cookie, char *buf, unsigned int len)
 	}
 }
 
-
 static void ICACHE_FLASH_ATTR
 recvTask(os_event_t *events)
 {
@@ -159,17 +185,18 @@ recvTask(os_event_t *events)
 		while ((READ_PERI_REG(UART_STATUS(UART0)) & (UART_RXFIFO_CNT << UART_RXFIFO_CNT_S)) && (length < MAX_UARTBUFFER))
 			uartbuffer[length++] = READ_PERI_REG(UART_FIFO(UART0)) & 0xFF;
 
-			/* broadcast serial-input to all telnet clients */
-			for (i = 0; i < MAXCLIENT; i++) {
-				if (clients[i].espconn != NULL) {
-					netout(&clients[i], uartbuffer, length);
-				}
+		/* broadcast serial-input to all telnet clients */
+		for (i = 0; i < MAXCLIENT; i++) {
+			if (clients[i].espconn != NULL) {
+				netout(&clients[i], uartbuffer, length);
 			}
+		}
+		led_update();
 	}
 
-	if(UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
+	if (UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
 		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_FULL_INT_CLR);
-	} else if(UART_RXFIFO_TOUT_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_TOUT_INT_ST)) {
+	} else if (UART_RXFIFO_TOUT_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_TOUT_INT_ST)) {
 		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_TOUT_INT_CLR);
 	}
 	ETS_UART_INTR_ENABLE();
@@ -218,38 +245,6 @@ serverRecvCb(void *arg, char *data, unsigned short len)
 }
 
 static void ICACHE_FLASH_ATTR
-serverConnectCb(void *arg)
-{
-	struct espconn *espconn;
-	struct client *client;
-
-	espconn = (struct espconn *)arg;
-#ifdef NETDEBUG
-	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
-#endif
-	client = allocate_clientinstance();
-	if (client == NULL) {
-		espconn_disconnect(espconn);
-	} else {
-		memset(client, 0, sizeof(*client));
-
-		telnet_init(&client->telnet);
-		fifo_init(&client->fifo_net);
-		client->fifo_net_sending = 0;
-		client->espconn = espconn;
-
-		espconn_regist_recvcb(espconn, serverRecvCb);
-		espconn_regist_sentcb(espconn, serverSentCb);
-	}
-
-	syslog_send(LOG_DAEMON|LOG_INFO, "telnet: connection from %d.%d.%d.%d",
-	    espconn->proto.tcp->remote_ip[0],
-	    espconn->proto.tcp->remote_ip[1],
-	    espconn->proto.tcp->remote_ip[2],
-	    espconn->proto.tcp->remote_ip[3]);
-}
-
-static void ICACHE_FLASH_ATTR
 serverDisconnectCb(void *arg)
 {
 	/* arg of serverDisconnectCb() is not session's espconn, arg is serverConn */
@@ -282,10 +277,47 @@ static void ICACHE_FLASH_ATTR
 serverReconnectCb(void *arg, sint8 err)
 {
 	/* XXX */
-	serverDisconnectCb(NULL);
+	printf("%s:%d\n", __func__, __LINE__);
+	syslog_send(LOG_DAEMON|LOG_ERR, "telnet: reconnect");
 }
 
-void
+static void ICACHE_FLASH_ATTR
+serverConnectCb(void *arg)
+{
+	struct espconn *espconn;
+	struct client *client;
+	static int once = 0;
+
+	espconn = (struct espconn *)arg;
+#ifdef NETDEBUG
+	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
+#endif
+	client = allocate_clientinstance();
+	if (client == NULL) {
+		espconn_disconnect(espconn);
+	} else {
+		memset(client, 0, sizeof(*client));
+
+		telnet_init(&client->telnet);
+		fifo_init(&client->fifo_net);
+		client->fifo_net_sending = 0;
+		client->espconn = espconn;
+
+		espconn_regist_recvcb(espconn, serverRecvCb);
+		espconn_regist_sentcb(espconn, serverSentCb);
+		espconn_regist_reconcb(espconn, serverReconnectCb);
+		espconn_regist_disconcb(espconn, serverDisconnectCb);
+	}
+
+	syslog_send(LOG_DAEMON|LOG_INFO, "telnet: connection from %d.%d.%d.%d",
+	    espconn->proto.tcp->remote_ip[0],
+	    espconn->proto.tcp->remote_ip[1],
+	    espconn->proto.tcp->remote_ip[2],
+	    espconn->proto.tcp->remote_ip[3]);
+//	syslog_send(LOG_DAEMON|LOG_DEBUG, "debug: heap=%d", system_get_free_heap_size());
+}
+
+void ICACHE_FLASH_ATTR
 server_init(int port)
 {
 	serverConn.type = ESPCONN_TCP;
@@ -294,13 +326,11 @@ server_init(int port)
 	serverConn.proto.tcp = &serverTcp;
 
 	espconn_regist_connectcb(&serverConn, serverConnectCb);
-	espconn_regist_reconcb(&serverConn, serverReconnectCb);
 	espconn_accept(&serverConn);
 	espconn_regist_time(&serverConn, SERVER_TIMEOUT, 0);
-	espconn_regist_disconcb(&serverConn, serverDisconnectCb);
 }
 
-void
+void ICACHE_FLASH_ATTR
 wifi_callback(System_Event_t *evt)
 {
 	switch (evt->event) {
@@ -323,7 +353,19 @@ wifi_callback(System_Event_t *evt)
 		break;
 
 	case EVENT_STAMODE_GOT_IP:
-#if 1
+#ifdef USE_SNTP
+		sntp_set_timezone(TIMEZONE);
+		sntp_setservername(0, SNTP_SERVER0);
+#ifdef SNTP_SERVER1
+		sntp_setservername(1, SNTP_SERVER1);
+#ifdef SNTP_SERVER2
+		sntp_setservername(2, SNTP_SERVER2);
+#endif
+#endif
+		sntp_init();
+#endif /* USE_SNTP */
+
+#if 0
 		printf("#IP:" IPSTR ",MASK:" IPSTR ",GW:" IPSTR,
 		    IP2STR(&evt->event_info.got_ip.ip),
 		    IP2STR(&evt->event_info.got_ip.mask),
@@ -331,7 +373,23 @@ wifi_callback(System_Event_t *evt)
 		printf("\n");
 #endif
 
-#if 1
+		syslog_send(LOG_DAEMON|LOG_INFO, "boot: chip_id=0x%08x, ver=0x%x, flash=%d, Mhz=%d",
+		    system_get_chip_id(),
+		    system_get_boot_version(),
+		    system_get_flash_size_map(),
+		    system_get_cpu_freq());
+
+#if 0
+		syslog_send(LOG_DAEMON|LOG_INFO, "debug: heap=%d",
+		    system_get_free_heap_size());
+#endif
+
+		syslog_send(LOG_DAEMON|LOG_INFO, "boot: address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR,
+		    IP2STR(&evt->event_info.got_ip.ip),
+		    IP2STR(&evt->event_info.got_ip.mask),
+		    IP2STR(&evt->event_info.got_ip.gw));
+
+#if 0
 		printf("boot chip_id=0x%08x, ver=%d, flash=%d, Mhz=%d, free=%d, address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR "\n",
 		    system_get_chip_id(),
 		    system_get_boot_version(),
@@ -342,25 +400,18 @@ wifi_callback(System_Event_t *evt)
 		    IP2STR(&evt->event_info.got_ip.mask),
 		    IP2STR(&evt->event_info.got_ip.gw));
 #endif
-
-		syslog_send(LOG_DAEMON|LOG_INFO, "boot: chip_id=0x%08x, ver=0x%x, flash=%d, Mhz=%d, free=%d",
-		    system_get_chip_id(),
-		    system_get_boot_version(),
-		    system_get_flash_size_map(),
-		    system_get_cpu_freq(),
-		    system_get_free_heap_size());
-
-		syslog_send(LOG_DAEMON|LOG_INFO, "boot: address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR,
-		    IP2STR(&evt->event_info.got_ip.ip),
-		    IP2STR(&evt->event_info.got_ip.mask),
-		    IP2STR(&evt->event_info.got_ip.gw));
 		break;
 
 	default:
 #if 0
-		printf("#wifi_callback: unknown event: %d\n", evt->event);
+		if (evt == NULL) {
+			printf("#wifi_callback: unknown event: evt\n");
+			syslog_send(LOG_DAEMON|LOG_DEBUG, "debug: wifi_callback: unknown event");
+		} else {
+			printf("#wifi_callback: unknown event: %d\n", evt->event);
+			syslog_send(LOG_DAEMON|LOG_DEBUG, "debug: wifi_callback: unknown event: %d", evt->event);
+		}
 #endif
-		syslog_send(LOG_DAEMON|LOG_DEBUG, "debug: wifi_callback: unknown event: %d", evt->event);
 
 		break;
 	}
@@ -369,7 +420,7 @@ wifi_callback(System_Event_t *evt)
 // UartDev is defined and initialized in rom code.
 extern UartDevice UartDev;
 
-void
+void ICACHE_FLASH_ATTR
 user_init(void)
 {
 	static struct station_config config;
@@ -404,24 +455,17 @@ user_init(void)
 	wifi_station_set_config(&config);
 	wifi_set_event_handler_cb(wifi_callback);
 
-	sntp_set_timezone(TIMEZONE);
-	sntp_setservername(0, SNTP_SERVER0);
-#ifdef SNTP_SERVER1
-	sntp_setservername(1, SNTP_SERVER1);
-#endif
-#ifdef SNTP_SERVER2
-	sntp_setservername(2, SNTP_SERVER2);
-#endif
-	sntp_init();
-
+	led_set(0, 0, 0, 0);
 
 	server_init(23);
 	syslog_init(SYSLOG_SERVER, MYNAME);
 
-
-	os_timer_disarm(&ostimer);
-	os_timer_setfn(&ostimer, timerhandler, NULL);
-	os_timer_arm(&ostimer, 50, 1);
+#ifdef USE_TIMER
+	/* XXX? */
+	os_timer_disarm(&tick_timer);
+	os_timer_setfn(&tick_timer, timerhandler, NULL);
+	os_timer_arm(&tick_timer, 1000 / HZ, 1);
+#endif
 
 	system_os_task(recvTask, recvTaskPrio, recvTaskQueue, recvTaskQueueLen);
 }
