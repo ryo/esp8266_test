@@ -13,19 +13,6 @@ static struct espconn syslog_espconn;
 static struct _esp_udp syslog_espconn_udp;
 static const char *syslog_hostname;
 
-static int syslog_sendok = 1;
-
-static void ICACHE_FLASH_ATTR
-syslog_sentCb(void *arg)
-{
-	struct espconn *espconn;
-
-	espconn = (struct espconn *)arg;
-
-	syslog_sendok = 1;
-}
-
-
 void ICACHE_FLASH_ATTR
 syslog_init(const char *server, const char *hostname)
 {
@@ -40,7 +27,6 @@ syslog_init(const char *server, const char *hostname)
 	syslog_espconn.proto.udp->remote_port = 514;	/* syslog */
 	ipaddr_aton(server, syslog_espconn.proto.udp->remote_ip);
 	rc = espconn_create(&syslog_espconn);
-	espconn_regist_sentcb(&syslog_espconn, syslog_sentCb);
 }
 
 void ICACHE_FLASH_ATTR
@@ -52,9 +38,6 @@ syslog_send(int fac_pri, const char *fmt, ...)
 	const char *hostname;
 	char *p;
 	sint8 rc;
-
-	if (!syslog_sendok)
-		return;
 
 	if ((hostname = syslog_hostname) == NULL)
 		hostname = "esp8266";
@@ -82,6 +65,5 @@ syslog_send(int fac_pri, const char *fmt, ...)
 	for (p = syslogpkt; *p != '\0'; p++)
 		;
 
-	syslog_sendok = 0;
 	rc = espconn_sent(&syslog_espconn, syslogpkt, p - syslogpkt);
 }

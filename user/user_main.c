@@ -7,7 +7,6 @@
 #include "user_interface.h"
 #include "user_config.h"
 #include "driver/uart.h"
-#include "driver/gpio16.h"
 
 #include "printf.h"
 #include "fifo.h"
@@ -17,17 +16,15 @@
 
 #undef NETDEBUG
 
-#undef USE_SNTP
-#undef USE_SYSLOG
-#undef USE_TIMER
+#define USE_SNTP
+#define USE_SYSLOG
+#define USE_TIMER
 
 #ifndef USE_SYSLOG
 #define syslog_init(x, y)
 #define syslog_send(...)
 #endif
 
-
-#define MAX_CONN	4
 #define MAX_TXBUFFER	1024
 #define SERVER_TIMEOUT	300
 
@@ -92,7 +89,7 @@ photorelay_ctrl(int sw, int onoff)
 }
 
 static void ICACHE_FLASH_ATTR
-led_set(int led0, int led1, int led2, int led3)
+led_set(int led0, int led1, int led2)
 {
 	if (led0)
 		gpio_output_set(BIT14, 0, BIT14, 0);
@@ -108,40 +105,29 @@ led_set(int led0, int led1, int led2, int led3)
 		gpio_output_set(BIT13, 0, BIT13, 0);
 	else
 		gpio_output_set(0, BIT13, BIT13, 0);
-
-	if (led3)
-		gpio16_output_set(1);
-	else
-		gpio16_output_set(0);
 }
 
 void ICACHE_FLASH_ATTR
 led_update(void)
 {
-	if (++ledcount >= 6)
+	if (++ledcount >= 4)
 		ledcount = 0;
 
 	switch (ledcount) {
 	case 0:
-		led_set(0, 0, 0, 1);
+		led_set(0, 0, 1);
 		break;
 	case 1:
-		led_set(0, 0, 1, 0);
+		led_set(0, 1, 0);
 		break;
 	case 2:
-		led_set(0, 1, 0, 0);
+		led_set(1, 0, 0);
 		break;
 	case 3:
-		led_set(1, 0, 0, 0);
-		break;
-	case 4:
-		led_set(0, 1, 0, 0);
-		break;
-	case 5:
-		led_set(0, 0, 1, 0);
+		led_set(0, 1, 0);
 		break;
 	default:
-		led_set(0, 0, 0, 0);
+		led_set(0, 0, 0);
 		break;
 	}
 }
@@ -191,7 +177,7 @@ recvTask(os_event_t *events)
 				netout(&clients[i], uartbuffer, length);
 			}
 		}
-		led_update();
+//		led_update();
 	}
 
 	if (UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
@@ -353,18 +339,6 @@ wifi_callback(System_Event_t *evt)
 		break;
 
 	case EVENT_STAMODE_GOT_IP:
-#ifdef USE_SNTP
-		sntp_set_timezone(TIMEZONE);
-		sntp_setservername(0, SNTP_SERVER0);
-#ifdef SNTP_SERVER1
-		sntp_setservername(1, SNTP_SERVER1);
-#ifdef SNTP_SERVER2
-		sntp_setservername(2, SNTP_SERVER2);
-#endif
-#endif
-		sntp_init();
-#endif /* USE_SNTP */
-
 #if 0
 		printf("#IP:" IPSTR ",MASK:" IPSTR ",GW:" IPSTR,
 		    IP2STR(&evt->event_info.got_ip.ip),
@@ -437,14 +411,12 @@ user_init(void)
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTMS_U, FUNC_GPIO14);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO4_U, FUNC_GPIO4);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
-	gpio16_output_conf();
 
 	gpio_output_set(BIT12, 0, BIT12, 0);
 	gpio_output_set(BIT13, 0, BIT13, 0);
 	gpio_output_set(BIT14, 0, BIT14, 0);
 	gpio_output_set(BIT4, 0, BIT4, 0);
 	gpio_output_set(BIT5, 0, BIT5, 0);
-	gpio16_output_set(0);
 
 	wifi_station_set_hostname(MYNAME);
 	wifi_set_opmode_current(STATION_MODE);
@@ -455,10 +427,24 @@ user_init(void)
 	wifi_station_set_config(&config);
 	wifi_set_event_handler_cb(wifi_callback);
 
-	led_set(0, 0, 0, 0);
+	led_set(1, 1, 1);
 
 	server_init(23);
 	syslog_init(SYSLOG_SERVER, MYNAME);
+
+
+#ifdef USE_SNTP
+	sntp_set_timezone(TIMEZONE);
+	sntp_setservername(0, SNTP_SERVER0);
+#ifdef SNTP_SERVER1
+	sntp_setservername(1, SNTP_SERVER1);
+#ifdef SNTP_SERVER2
+	sntp_setservername(2, SNTP_SERVER2);
+#endif
+#endif
+		sntp_init();
+#endif /* USE_SNTP */
+
 
 #ifdef USE_TIMER
 	/* XXX? */
