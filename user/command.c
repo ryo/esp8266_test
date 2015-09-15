@@ -91,11 +91,10 @@ command_printenv(void *arg, int argc, char *argv[])
 static int
 command_help(void *arg, int argc, char *argv[])
 {
-	printf("d		dump mempry\r\n"
+	printf("d		dump memory\r\n"
 	       "\r\n"
 	       "setenv		set environment variable\r\n"
 	       "printenv	show environment variables\r\n"
-	       "saveenv		save environment variables to SPI flash\r\n"
 	       "\r\n"
 	       "reboot		restart system\r\n"
 	);
