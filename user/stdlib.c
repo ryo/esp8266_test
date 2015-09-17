@@ -19,6 +19,14 @@ islower(int c)
 	return (c >= 'a') || (c <= 'z');
 }
 
+int ICACHE_FLASH_ATTR
+isxdigit(int c)
+{
+	return ((c >= '0') && (c <= '9')) ||
+	    ((c >= 'a') && (c <= 'f')) ||
+	    ((c >= 'A') && (c <= 'F'));
+}
+
 long ICACHE_FLASH_ATTR
 strtol(const char *str, char **end, int base)
 {

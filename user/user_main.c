@@ -273,9 +273,10 @@ netout_flush(void *cookie)
 	if (client->fifo_net_sending == 0) {
 		client->fifo_net_sending = 1;
 
-		p = fifo_getpkt(&client->fifo_net, &l);
+		p = fifo_getbulk(&client->fifo_net, &l);
 		rc = espconn_sent(client->espconn, p, l);
 		if (rc != ESPCONN_OK) {
+			syslog_send(LOG_DAEMON|LOG_DEBUG, "telnet: espconn_sent: error %d", rc);
 			espconn_disconnect(client->espconn);
 		}
 	}
@@ -313,7 +314,11 @@ recvTask(os_event_t *events)
 			/* broadcast serial data to all telnet clients */
 			for (nclients = 0, i = 0; i < MAXCLIENT; i++) {
 				if (clients[i].espconn != NULL) {
+#if 1
 					netout(&clients[i], uartbuffer, length);
+#else
+					netout(&clients[i], "################################################################################################################################", 128);
+#endif
 					netout_flush(&clients[i]);
 					nclients++;
 				}
@@ -322,6 +327,11 @@ recvTask(os_event_t *events)
 
 //		led_update();
 	}
+#if 0
+	netout(&clients[0], "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", 64);
+	netout_flush(&clients[0]);
+#endif
+
 
 	if (UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
 		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_FULL_INT_CLR);
@@ -346,12 +356,17 @@ serverSentCb(void *arg)
 #endif
 	client = lookup_clientinstance(espconn);
 
+#if 0 /* XXX */
+  system_os_post(recvTaskPrio, 0, 0);
+#endif
+
 	if (fifo_len(&client->fifo_net) == 0) {
 		client->fifo_net_sending = 0;
 	} else {
-		p = fifo_getpkt(&client->fifo_net, &l);
+		p = fifo_getbulk(&client->fifo_net, &l);
 		rc = espconn_sent(espconn, p, l);
 		if (rc != ESPCONN_OK) {
+			syslog_send(LOG_DAEMON|LOG_DEBUG, "telnet: espconn_sent(continuous): error %d", rc);
 			espconn_disconnect(espconn);
 		}
 	}
@@ -537,35 +552,60 @@ wifi_callback(System_Event_t *evt)
 		    IP2STR(&evt->event_info.got_ip.mask),
 		    IP2STR(&evt->event_info.got_ip.gw));
 #endif
-
-		syslog_send(LOG_DAEMON|LOG_INFO, "system: chip-id=0x%08x, boot-version=%d, flash-size-map=%d(%s), cpu-freq=%dMhz",
-		    system_get_chip_id(),
-		    system_get_boot_version(),
-		    system_get_flash_size_map(),
-		    strflashsize(system_get_flash_size_map()),
-		    system_get_cpu_freq());
-
-#if 0
-		syslog_send(LOG_DAEMON|LOG_DEBUG, "debug: heap=%d",
-		    system_get_free_heap_size());
-#endif
-
 		syslog_send(LOG_DAEMON|LOG_INFO, "system: address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR,
 		    IP2STR(&evt->event_info.got_ip.ip),
 		    IP2STR(&evt->event_info.got_ip.mask),
 		    IP2STR(&evt->event_info.got_ip.gw));
 
+
+		/* syslog reset info (for debug) */
+		{
+			struct rst_info *rstinfo;
+			char *reasonstr;
+
+			rstinfo = system_get_rst_info();
+
+			switch (rstinfo->reason) {
+			case REASON_DEFAULT_RST:	reasonstr = "REASON_DEFAULT_RST";
+			case REASON_WDT_RST:		reasonstr = "REASON_WDT_RST";
+			case REASON_EXCEPTION_RST:	reasonstr = "REASON_EXCEPTION_RST";
+			case REASON_SOFT_WDT_RST:	reasonstr = "REASON_SOFT_WDT_RST";
+			case REASON_SOFT_RESTART:	reasonstr = "REASON_SOFT_RESTART";
+			case REASON_DEEP_SLEEP_AWAKE:	reasonstr = "REASON_DEEP_SLEEP_AWAKE";
+			case REASON_EXT_SYS_RST:	reasonstr = "REASON_EXT_SYS_RST";
+			default:			reasonstr = "???";
+			}
+
+			syslog_send(LOG_DAEMON|LOG_INFO, "system: reset info reason=%s, exccause=0x%x, epc1=0x%x, epc2=0x%x, epc3=0x%x, excvaddr=0x%x, depc=0x%x",
+			    reasonstr,
+			    rstinfo->exccause,
+			    rstinfo->epc1,
+			    rstinfo->epc2,
+			    rstinfo->epc3,
+			    rstinfo->excvaddr,
+			    rstinfo->depc);
+		}
+
 #ifdef PRINTFDEBUG
-		printf("#boot: chip_id=0x%08x, ver=%d, flash=%d, Mhz=%d, free=%d\nboot: address=" IPSTR ", mask=" IPSTR ", gateway=" IPSTR "\n",
+		printf("#boot: Mhz=%d, chip_id=0x%08x, ver=%d, flash=%d, heap=%d",
+		    system_get_cpu_freq(),
 		    system_get_chip_id(),
 		    system_get_boot_version(),
 		    system_get_flash_size_map(),
-		    system_get_cpu_freq(),
-		    system_get_free_heap_size(),
-		    IP2STR(&evt->event_info.got_ip.ip),
-		    IP2STR(&evt->event_info.got_ip.mask),
-		    IP2STR(&evt->event_info.got_ip.gw));
+		    system_get_free_heap_size());
 #endif
+
+		syslog_send(LOG_DAEMON|LOG_INFO, "system: cpu-freq=%dMHz chip-id=0x%08x, boot-version=%d, flash-size-map=%d(%s)",
+		    system_get_cpu_freq(),
+		    system_get_chip_id(),
+		    system_get_boot_version(),
+		    system_get_flash_size_map(),
+		    strflashsize(system_get_flash_size_map()));
+
+		syslog_send(LOG_DAEMON|LOG_INFO, "system: sdk-version=%s, heap=%d",
+		    system_get_sdk_version(),
+		    system_get_free_heap_size());
+
 		break;
 
 	default:

@@ -18,7 +18,9 @@ MODULES		= driver user
 EXTRA_INCDIR    = include
 
 # libraries used in this project, mainly provided by the SDK
-LIBS		= gcc hal pp phy net80211 lwip wpa main
+LIBS		= gcc hal pp phy net80211 wpa main
+#LIBS		+= lwip
+LIBS		+= lwip_debug
 
 # compiler flags using during compilation of source files
 CFLAGS		= -fomit-frame-pointer -O2 -Wpointer-arith -Wundef -Werror -Wl,-EL -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals  -D__ets__ -DICACHE_FLASH
@@ -32,7 +34,8 @@ LD_SCRIPT	= eagle.app.v6.ld
 # various paths from the SDK used in this project
 SDK_LIBDIR	= lib
 SDK_LDDIR	= ld
-SDK_INCDIR	= include include/json
+SDK_INCDIR	= include
+#SDK_INCDIR	+= include/json
 
 # we create two different files for uploading into the flash
 # these are the names and options to generate them

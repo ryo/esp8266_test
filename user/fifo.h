@@ -26,7 +26,7 @@ int fifo_putc(struct fifo *, char);
 int fifo_getc(struct fifo *);
 unsigned int fifo_space(struct fifo *);
 
-char *fifo_getpkt(struct fifo *, unsigned int *);
+char *fifo_getbulk(struct fifo *, unsigned int *);
 
 int fifo_write(struct fifo *, char *, unsigned int);
 int fifo_read(struct fifo *, char *, unsigned int);

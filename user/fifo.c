@@ -98,7 +98,7 @@ fifo_read(struct fifo *fifo, char *buf, unsigned int len)
 }
 
 char * ICACHE_FLASH_ATTR
-fifo_getpkt(struct fifo *fifo, unsigned int *lenp)
+fifo_getbulk(struct fifo *fifo, unsigned int *lenp)
 {
 	unsigned int r;
 	unsigned int len;

@@ -42,7 +42,11 @@ syslog_send(int fac_pri, const char *fmt, ...)
 	if ((hostname = syslog_hostname) == NULL)
 		hostname = "esp8266";
 
+#if 1
 	os_strcpy(timestr, sntp_get_real_time(sntp_get_current_timestamp()));
+#else
+	os_strcpy(timestr, "Thu Jan 01 00:00:00 1970");
+#endif
 
 	/*
 	 * "Thu Sep 03 03:33:33 2015\n"
