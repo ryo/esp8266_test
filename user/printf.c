@@ -52,26 +52,26 @@ typedef unsigned long	u_long;
 #define SIGN		0x20
 #define ZEROPAD		0x40
 #define NEGATIVE	0x80
-#define KPRINTN(base)	kprintn(put, ul, base, lflag, width)
+#define KPRINTN(base)	kprintn(put, arg, ul, base, lflag, width)
 #define RADJUSTZEROPAD()					\
 do {								\
 	if ((lflag & (ZEROPAD|LADJUST)) == ZEROPAD) {		\
 		while (width-- > 0)				\
-			put('0');				\
+			put(arg, '0');				\
 	}							\
 } while (/*CONSTCOND*/0)
 #define LADJUSTPAD()						\
 do {								\
 	if (lflag & LADJUST) {					\
 		while (width-- > 0)				\
-			put(' ');				\
+			put(arg, ' ');				\
 	}							\
 } while (/*CONSTCOND*/0)
 #define RADJUSTPAD()						\
 do {								\
 	if ((lflag & (ZEROPAD|LADJUST)) == 0) {			\
 		while (width-- > 0)				\
-			put(' ');				\
+			put(arg, ' ');				\
 	}							\
 } while (/*CONSTCOND*/0)
 #else	/* LIBSA_PRINTF_WIDTH_SUPPORT */
@@ -94,16 +94,16 @@ do {								\
 #define PTRDIFF_T	intptr_t
 
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
-static void kprintn(int (*)(int), unsigned long long, int, int, int);
+static void kprintn(int (*)(void *, int), void *, unsigned long long, int, int, int);
 #else
-static void kprintn(int (*)(int), unsigned long long, int);
+static void kprintn(int (*)(void *, int), void *, unsigned long long, int);
 #endif
-static void kdoprnt(int (*)(int), const char *, va_list);
+static void kdoprnt(int (*)(void *, int), void *, const char *, va_list);
 
 const char hexdigits[16] = "0123456789abcdef";
 
 static void ICACHE_FLASH_ATTR
-kdoprnt(int (*put)(int), const char *fmt, va_list ap)
+kdoprnt(int (*put)(void *, int), void *arg, const char *fmt, va_list ap)
 {
 	char *p;
 	int ch;
@@ -118,7 +118,7 @@ kdoprnt(int (*put)(int), const char *fmt, va_list ap)
 		while ((ch = *fmt++) != '%') {
 			if (ch == '\0')
 				return;
-			put(ch);
+			put(arg, ch);
 		}
 		lflag = 0;
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
@@ -181,7 +181,7 @@ reswitch:
 			--width;
 #endif
 			RADJUSTPAD();
-			put(ch & 0xFF);
+			put(arg, ch & 0xFF);
 			LADJUSTPAD();
 			break;
 		case 's':
@@ -193,7 +193,7 @@ reswitch:
 #endif
 			RADJUSTPAD();
 			while ((ch = (unsigned char)*p++))
-				put(ch);
+				put(arg, ch);
 			LADJUSTPAD();
 			break;
 		case 'd':
@@ -204,7 +204,7 @@ reswitch:
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
 				lflag |= NEGATIVE;
 #else
-				put('-');
+				put(arg, '-');
 #endif
 			}
 			KPRINTN(10);
@@ -219,8 +219,8 @@ reswitch:
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
 			lflag |= (LONG|ALT);
 #else
-			put('0');
-			put('x');
+			put(arg, '0');
+			put(arg, 'x');
 #endif
 			/* FALLTHROUGH */
 		case 'x':
@@ -229,7 +229,7 @@ reswitch:
 		default:
 			if (ch == '\0')
 				return;
-			put(ch);
+			put(arg, ch);
 			break;
 		}
 	}
@@ -237,9 +237,9 @@ reswitch:
 
 static void ICACHE_FLASH_ATTR
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
-kprintn(int (*put)(int), unsigned long long ul, int base, int lflag, int width)
+kprintn(int (*put)(void *, int), void *arg, unsigned long long ul, int base, int lflag, int width)
 #else
-kprintn(int (*put)(int), unsigned long long ul, int base)
+kprintn(int (*put)(void *, int), void *arg, unsigned long long ul, int base)
 #endif
 {
 					/* hold a INTMAX_T in base 8 */
@@ -271,23 +271,37 @@ kprintn(int (*put)(int), unsigned long long ul, int base)
 	width -= p - buf;
 	if (lflag & ZEROPAD) {
 		while (p > q)
-			put(*--p);
+			put(arg, *--p);
 	}
 #endif
 	RADJUSTPAD();
 	RADJUSTZEROPAD();
 	do {
-		put(*--p);
+		put(arg, *--p);
 	} while (p > buf);
 	LADJUSTPAD();
 }
 
-int putchar(int);
+int ICACHE_FLASH_ATTR
+serial_putc(void *arg, int c)
+{
+	if (c == '\n')
+		uart_tx_one_char(UART0, '\r');
+	uart_tx_one_char(UART0, c);
+	return 0;
+}
+
+int ICACHE_FLASH_ATTR
+netout_putc(void *arg, int c)
+{
+	// XXX: notyet
+	return 0;
+}
 
 int ICACHE_FLASH_ATTR
 vprintf(const char *fmt, va_list ap)
 {
-	kdoprnt(putchar, fmt, ap);
+	kdoprnt(serial_putc, NULL, fmt, ap);
 	return 0;	/* XXX */
 }
 
@@ -299,6 +313,26 @@ printf(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	rc = vprintf(fmt, ap);
+	va_end(ap);
+
+	return rc;
+}
+
+int ICACHE_FLASH_ATTR
+xprintf(void *arg, const char *fmt, ...)
+{
+	int rc;
+	va_list ap;
+
+	va_start(ap, fmt);
+
+	if (arg == NULL) {
+		rc = vprintf(fmt, ap);
+	} else {
+		kdoprnt(netout_putc, arg, fmt, ap);
+		return 0;	/* XXX */
+	}
+
 	va_end(ap);
 
 	return rc;

@@ -314,11 +314,7 @@ recvTask(os_event_t *events)
 			/* broadcast serial data to all telnet clients */
 			for (nclients = 0, i = 0; i < MAXCLIENT; i++) {
 				if (clients[i].espconn != NULL) {
-#if 1
 					netout(&clients[i], uartbuffer, length);
-#else
-					netout(&clients[i], "################################################################################################################################", 128);
-#endif
 					netout_flush(&clients[i]);
 					nclients++;
 				}
@@ -327,10 +323,6 @@ recvTask(os_event_t *events)
 
 //		led_update();
 	}
-#if 0
-	netout(&clients[0], "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", 64);
-	netout_flush(&clients[0]);
-#endif
 
 
 	if (UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
@@ -355,10 +347,6 @@ serverSentCb(void *arg)
 	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
 #endif
 	client = lookup_clientinstance(espconn);
-
-#if 0 /* XXX */
-  system_os_post(recvTaskPrio, 0, 0);
-#endif
 
 	if (fifo_len(&client->fifo_net) == 0) {
 		client->fifo_net_sending = 0;
@@ -434,11 +422,12 @@ serverDisconnectCb(void *arg)
 			/* reap disconnected client info */
 			client = lookup_clientinstance(espconn);
 			if (client != NULL) {
-				syslog_send(LOG_DAEMON|LOG_INFO, "telnet: disconnect from %d.%d.%d.%d",
+				syslog_send(LOG_DAEMON|LOG_INFO, "telnet: disconnect from %d.%d.%d.%d:%d",
 				    client->remote_ip[0],
 				    client->remote_ip[1],
 				    client->remote_ip[2],
-				    client->remote_ip[3]);
+				    client->remote_ip[3],
+				    client->remote_port);
 				client->espconn = NULL;
 			}
 		}

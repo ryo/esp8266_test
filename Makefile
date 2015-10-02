@@ -20,7 +20,8 @@ EXTRA_INCDIR    = include
 # libraries used in this project, mainly provided by the SDK
 LIBS		= gcc hal pp phy net80211 wpa main
 #LIBS		+= lwip
-LIBS		+= lwip_debug
+#LIBS		+= lwip_debug
+LIBS		+= lwip_release
 
 # compiler flags using during compilation of source files
 CFLAGS		= -fomit-frame-pointer -O2 -Wpointer-arith -Wundef -Werror -Wl,-EL -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals  -D__ets__ -DICACHE_FLASH
