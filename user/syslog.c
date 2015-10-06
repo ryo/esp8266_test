@@ -13,7 +13,8 @@ static struct espconn syslog_espconn;
 static struct _esp_udp syslog_espconn_udp;
 static const char *syslog_hostname;
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 syslog_init(const char *server, const char *hostname)
 {
 	sint8 rc;
@@ -29,7 +30,8 @@ syslog_init(const char *server, const char *hostname)
 	rc = espconn_create(&syslog_espconn);
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 syslog_send(int fac_pri, const char *fmt, ...)
 {
 	va_list ap;

@@ -37,6 +37,8 @@
 
 #include "c_types.h"
 
+#include "netclient.h"
+
 
 static void send_do(void *, int, int);
 static void send_dont(void *, int, int);
@@ -57,29 +59,33 @@ static void send_wont(void *, int, int);
 //static int telnet_state = TS_DATA;
 
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 telnet_init(struct telnet *telnet)
 {
 	telnet->telopt_sent = 0;
 	telnet->telnet_state = TS_DATA;
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 telnet_init_once(struct telnet *telnet ,void *cookie)
 {
 	if (telnet->telopt_sent == 0) {
 		send_will(cookie, TELOPT_BINARY, 1);
 		send_will(cookie, TELOPT_ECHO, 1);
+		netout_flush((struct netclient *)cookie);
 		telnet->telopt_sent = 1;
 	}
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 send_do(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, DO };
 	buf[2] = option;
-	netout(cookie, buf, 3);
+	netout((struct netclient *)cookie, buf, 3);
 
 #ifdef TELNET_DEBUG
 	if (TELOPT_OK(option)) {
@@ -90,12 +96,13 @@ send_do(void *cookie, int option, int init)
 #endif
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 send_dont(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, DONT };
 	buf[2] = option;
-	netout(cookie, buf, 3);
+	netout((struct netclient *)cookie, buf, 3);
 
 #ifdef TELNET_DEBUG
 	if (TELOPT_OK(option)) {
@@ -106,12 +113,13 @@ send_dont(void *cookie, int option, int init)
 #endif
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 send_will(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, WILL };
 	buf[2] = option;
-	netout(cookie, buf, 3);
+	netout((struct netclient *)cookie, buf, 3);
 
 #ifdef TELNET_DEBUG
 	if (TELOPT_OK(option)) {
@@ -122,12 +130,13 @@ send_will(void *cookie, int option, int init)
 #endif
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 send_wont(void *cookie, int option, int init)
 {
 	char buf[3] = { IAC, WONT };
 	buf[2] = option;
-	netout(cookie, buf, 3);
+	netout((struct netclient *)cookie, buf, 3);
 
 #ifdef TELNET_DEBUG
 	if (TELOPT_OK(option)) {
@@ -138,44 +147,51 @@ send_wont(void *cookie, int option, int init)
 #endif
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 interrupt(void)
 {
 	/* nothong */
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 sendbrk(void)
 {
 	/* nothong */
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 recv_ayt(void *cookie)
 {
-	netout(cookie, "\r\n[Yes]\r\n", 9);
+	netout((struct netclient *)cookie, "\r\n[Yes]\r\n", 9);
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 abort_output(void)
 {
 	/* nothong */
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 erase_character(void)
 {
 	/* as 0x7f? */
 	/* nothong */
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 erase_line(void)
 {
 	/* nothing */
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 urgent_data(void)
 {
 	/* nothong */
@@ -189,7 +205,8 @@ const char *strstate[] = {
 
 #define	TELNET_INPUT(c)		putchar(c)
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 telnet_recv(struct telnet *telnet, void *cookie, char *buf, unsigned int len)
 {
 	int c;

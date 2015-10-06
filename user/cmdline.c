@@ -33,20 +33,23 @@ static int addhist(struct cmdline *, char *);
 static int prevhist(struct cmdline *);
 static int nexthist(struct cmdline *);
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 beep(struct cmdline *cmdline)
 {
 	cmdline->cmdputc(cmdline->cmdputcarg, 0x07);
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 clearkillbuffer(struct cmdline *cmdline)
 {
 	cmdline->klen = 0;
 	memset(cmdline->killbuf, 0, sizeof(cmdline->killbuf));
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 appendkillbuffer(struct cmdline *cmdline, char ch, int append)
 {
 	if (append==0)
@@ -70,7 +73,8 @@ appendkillbuffer(struct cmdline *cmdline, char ch, int append)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 inword(struct cmdline *cmdline)
 {
 	char ch;
@@ -85,7 +89,8 @@ inword(struct cmdline *cmdline)
 	return FALSE;
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 cmdline_init(struct cmdline *cmdline, void (*cmdputc_func)(void *arg, char ch), void *arg)
 {
 	memset(cmdline, 0, sizeof(struct cmdline));
@@ -94,7 +99,8 @@ cmdline_init(struct cmdline *cmdline, void (*cmdputc_func)(void *arg, char ch), 
 	cmdline->cmdputcarg = arg;
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 cmdline_puts(struct cmdline *cmdline, const char *str)
 {
 	char c;
@@ -103,7 +109,8 @@ cmdline_puts(struct cmdline *cmdline, const char *str)
 		cmdline->cmdputc(cmdline->cmdputcarg, c);
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 cmdline_reset(struct cmdline *cmdline)
 {
 	cmdline->line[0] = '\0';
@@ -118,7 +125,8 @@ cmdline_reset(struct cmdline *cmdline)
 	cmdline_puts(cmdline, cmdline->prompt);
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 setmark(struct cmdline *cmdline)
 {
 	cmdline->validmark = 1;
@@ -126,7 +134,8 @@ setmark(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 getmark(struct cmdline *cmdline)
 {
 	int r;
@@ -143,7 +152,8 @@ getmark(struct cmdline *cmdline)
 	return r;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 forward(struct cmdline *cmdline, int n)
 {
 	while (n-->0) {
@@ -156,7 +166,8 @@ forward(struct cmdline *cmdline, int n)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 backward(struct cmdline *cmdline, int n)
 {
 	while (n-->0) {
@@ -169,19 +180,22 @@ backward(struct cmdline *cmdline, int n)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 beginning_of_line(struct cmdline *cmdline)
 {
 	return backward(cmdline, cmdline->pos);
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 end_of_line(struct cmdline *cmdline)
 {
 	return forward(cmdline, cmdline->len - cmdline->pos);
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 delete(struct cmdline *cmdline, int append)
 {
 	int i;
@@ -211,7 +225,8 @@ delete(struct cmdline *cmdline, int append)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 backspace(struct cmdline *cmdline, int append)
 {
 	if (backward(cmdline, 1) == FALSE)
@@ -219,7 +234,8 @@ backspace(struct cmdline *cmdline, int append)
 	return delete(cmdline, append);
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 insert(struct cmdline *cmdline, char ch)
 {
 	int i;
@@ -250,7 +266,8 @@ insert(struct cmdline *cmdline, char ch)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 insertstr(struct cmdline *cmdline, char *str)
 {
 	while (*str) {
@@ -260,7 +277,8 @@ insertstr(struct cmdline *cmdline, char *str)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 forward_word(struct cmdline *cmdline)
 {
 	while (inword(cmdline) != FALSE) {
@@ -278,7 +296,8 @@ forward_word(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 backward_word(struct cmdline *cmdline)
 {
 	if (backward(cmdline, 1) == FALSE)
@@ -297,7 +316,8 @@ backward_word(struct cmdline *cmdline)
 	return forward(cmdline, 1);
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 delete_word(struct cmdline *cmdline)
 {
 	if (cmdline->pos >= cmdline->len)
@@ -318,7 +338,8 @@ delete_word(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 backward_delete_word(struct cmdline *cmdline)
 {
 	if (cmdline->pos == 0)
@@ -353,7 +374,8 @@ backward_delete_word(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 killregion(struct cmdline *cmdline)
 {
 	int i;
@@ -377,7 +399,8 @@ killregion(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 swapmark(struct cmdline *cmdline)
 {
 	int r;
@@ -395,7 +418,8 @@ swapmark(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 killtoend(struct cmdline *cmdline)
 {
 	if (cmdline->len == 0)
@@ -412,7 +436,8 @@ killtoend(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 killline(struct cmdline *cmdline, int cut)
 {
 	if (cmdline->len==0)
@@ -430,7 +455,8 @@ killline(struct cmdline *cmdline, int cut)
 	return TRUE;
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 yank(struct cmdline *cmdline)
 {
 	cmdline->killbuf[cmdline->klen] = '\0';
@@ -455,7 +481,8 @@ yank(struct cmdline *cmdline)
 		}							\
 	} while (0 /* CONSTCOND */)
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 fetch_from_history(struct cmdline *cmdline)
 {
 	int i;
@@ -468,7 +495,8 @@ fetch_from_history(struct cmdline *cmdline)
 	}
 }
 
-static inline int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static inline int
 allspace(const char *str)
 {
 	for (; *str != '\0'; str++) {
@@ -478,7 +506,8 @@ allspace(const char *str)
 	return 1;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 addhist(struct cmdline *cmdline, char *str)
 {
 	if (cmdline->hist_pending) {
@@ -518,7 +547,8 @@ addhist(struct cmdline *cmdline, char *str)
 	return 0;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 prevhist(struct cmdline *cmdline)
 {
 	if (cmdline->histptr == cmdline->histcur) {
@@ -557,7 +587,8 @@ prevhist(struct cmdline *cmdline)
 	return TRUE;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 nexthist(struct cmdline *cmdline)
 {
 	int save;
@@ -585,7 +616,8 @@ nexthist(struct cmdline *cmdline)
 	return TRUE;
 }
 
-static char * ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static char *
 cmdline_input(struct cmdline *cmdline, char ch)
 {
 	if (cmdline->esc) {
@@ -684,7 +716,8 @@ cmdline_input(struct cmdline *cmdline, char ch)
 	return NULL;	/* in editing */
 }
 
-static int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static int
 execute(char *cmd, struct cmdtbl *cmdtbl, void *arg)
 {
 #define MAXARGV	16
@@ -765,13 +798,15 @@ execute(char *cmd, struct cmdtbl *cmdtbl, void *arg)
 	return -1;
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 cmdline_setprompt(struct cmdline *cmdline, const char *prompt)
 {
 	cmdline->prompt = prompt;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 commandline(struct cmdline *cmdline, char ch, struct cmdtbl *cmdtbl, void *arg)
 {
 	char *p;

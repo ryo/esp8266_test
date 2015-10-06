@@ -33,6 +33,8 @@
 #include <stdarg.h>
 #include "driver/uart.h"
 
+#include "netclient.h"
+
 typedef long long int	intmax_t;
 typedef int		intptr_t;
 typedef unsigned int	uintptr_t;
@@ -102,7 +104,8 @@ static void kdoprnt(int (*)(void *, int), void *, const char *, va_list);
 
 const char hexdigits[16] = "0123456789abcdef";
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 kdoprnt(int (*put)(void *, int), void *arg, const char *fmt, va_list ap)
 {
 	char *p;
@@ -235,7 +238,8 @@ reswitch:
 	}
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 #ifdef LIBSA_PRINTF_WIDTH_SUPPORT
 kprintn(int (*put)(void *, int), void *arg, unsigned long long ul, int base, int lflag, int width)
 #else
@@ -282,7 +286,8 @@ kprintn(int (*put)(void *, int), void *arg, unsigned long long ul, int base)
 	LADJUSTPAD();
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 serial_putc(void *arg, int c)
 {
 	if (c == '\n')
@@ -291,21 +296,28 @@ serial_putc(void *arg, int c)
 	return 0;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 netout_putc(void *arg, int c)
 {
-	// XXX: notyet
+	char buf[1];
+
+	buf[0] = c;
+
+	netout((struct netclient *)arg, buf, 1);
 	return 0;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 vprintf(const char *fmt, va_list ap)
 {
 	kdoprnt(serial_putc, NULL, fmt, ap);
 	return 0;	/* XXX */
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 printf(const char *fmt, ...)
 {
 	int rc;
@@ -318,7 +330,8 @@ printf(const char *fmt, ...)
 	return rc;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 xprintf(void *arg, const char *fmt, ...)
 {
 	int rc;
@@ -330,7 +343,7 @@ xprintf(void *arg, const char *fmt, ...)
 		rc = vprintf(fmt, ap);
 	} else {
 		kdoprnt(netout_putc, arg, fmt, ap);
-		return 0;	/* XXX */
+		rc = 0;
 	}
 
 	va_end(ap);
@@ -339,7 +352,8 @@ xprintf(void *arg, const char *fmt, ...)
 }
 
 #undef putchar
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 putchar(int c)
 {
 	if (c == '\n')
@@ -348,7 +362,8 @@ putchar(int c)
 	return 0;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 puts(const char *str)
 {
 	while (*str != '\0')

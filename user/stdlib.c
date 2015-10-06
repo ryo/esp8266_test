@@ -1,25 +1,29 @@
 #include "ets_sys.h"
 #include "stdlib.h"
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 isspace(int c)
 {
 	return (c == ' ') || (c == '\t');
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 isupper(int c)
 {
 	return (c >= 'A') || (c <= 'Z');
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 islower(int c)
 {
 	return (c >= 'a') || (c <= 'z');
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 isxdigit(int c)
 {
 	return ((c >= '0') && (c <= '9')) ||
@@ -27,7 +31,8 @@ isxdigit(int c)
 	    ((c >= 'A') && (c <= 'F'));
 }
 
-long ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+long
 strtol(const char *str, char **end, int base)
 {
 	int c;

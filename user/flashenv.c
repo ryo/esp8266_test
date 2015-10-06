@@ -27,6 +27,7 @@ const char __environ_init[] =
      "\0";
 
 #ifdef DEBUG
+ICACHE_FLASH_ATTR
 static void
 dump(char *data, unsigned int len)
 {
@@ -45,6 +46,7 @@ dump(char *data, unsigned int len)
 }
 #endif
 
+ICACHE_FLASH_ATTR
 static inline char *
 nextenv(char *env)
 {
@@ -56,7 +58,7 @@ nextenv(char *env)
 	return env;
 }
 
-
+ICACHE_FLASH_ATTR
 static int
 flashenv_load(void)
 {
@@ -77,6 +79,7 @@ flashenv_load(void)
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 int
 flashenv_save(void)
 {
@@ -87,6 +90,7 @@ flashenv_save(void)
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 int
 flashenv_printenv(void *arg)
 {
@@ -100,6 +104,7 @@ flashenv_printenv(void *arg)
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 static int
 flashenv_match(char *environ, const char *name)
 {
@@ -115,6 +120,7 @@ flashenv_match(char *environ, const char *name)
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 static char *
 flashenv_findenv(char *environ, const char *name)
 {
@@ -133,6 +139,7 @@ flashenv_findenv(char *environ, const char *name)
 	return NULL;
 }
 
+ICACHE_FLASH_ATTR
 static int
 flashenv_deleteenv(char *environ, const char *name)
 {
@@ -158,6 +165,7 @@ flashenv_deleteenv(char *environ, const char *name)
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 static char *
 flashenv_addenv(char *environ, unsigned int environ_len, const char *name, const char *value)
 {
@@ -184,6 +192,7 @@ flashenv_addenv(char *environ, unsigned int environ_len, const char *name, const
 	return p0;
 }
 
+ICACHE_FLASH_ATTR
 int
 flashenv_setenv(void *arg, const char *name, const char *value)
 {
@@ -202,6 +211,7 @@ flashenv_setenv(void *arg, const char *name, const char *value)
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 const char *
 flashenv_getenv(const char *name)
 {

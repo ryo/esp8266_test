@@ -5,7 +5,6 @@
 #include "ip_addr.h"
 #include "espconn.h"
 #include "user_interface.h"
-#include "user_config.h"
 #include "driver/uart.h"
 
 #include "printf.h"
@@ -17,6 +16,7 @@
 #include "command.h"
 #include "flashenv.h"
 #include "stdlib.h"
+#include "netclient.h"
 
 #undef NETDEBUG
 #undef PRINTFDEBUG
@@ -43,52 +43,14 @@ static os_timer_t tick_timer;
 uint8 wifi_connected;
 struct cmdline cmdline;
 
-#define MAXCLIENT	3
-struct client {
-	struct espconn *espconn;
-	struct telnet telnet;
-	struct fifo fifo_net;
-	int fifo_net_sending;
-	uint8 remote_ip[4];
-	uint16 local_port;
-	uint16 remote_port;
-} clients[MAXCLIENT];
-
-static void ICACHE_FLASH_ATTR
-client_init(struct client *client, struct espconn *espconn)
-{
-	memset(client, 0, sizeof(*client));
-
-	telnet_init(&client->telnet);
-	fifo_init(&client->fifo_net);
-	client->fifo_net_sending = 0;
-	client->espconn = espconn;
-
-	/* copy tcp info from espconn */
-	memcpy(client->remote_ip, espconn->proto.tcp->remote_ip, sizeof(client->remote_ip));
-	client->remote_port = espconn->proto.tcp->remote_port;
-	client->local_port = espconn->proto.tcp->local_port;
-}
-
-static inline struct client *
-lookup_clientinstance(struct espconn *espconn)
-{
-	int i;
-	for (i = 0; i < MAXCLIENT; i++) {
-		if (clients[i].espconn == espconn)
-			return &clients[i];
-	}
-	return NULL;
-}
-
-
 os_event_t recvTaskQueue[recvTaskQueueLen];
 
 #define MAX_UARTBUFFER (MAX_TXBUFFER/4)
 static uint8 uartbuffer[MAX_UARTBUFFER];
 
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 photorelay_ctrl(int sw, int onoff)
 {
 	if (sw) {
@@ -104,7 +66,8 @@ photorelay_ctrl(int sw, int onoff)
 	}
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 led_set(int led0, int led1, int led2)
 {
 #ifdef USE_LED
@@ -134,7 +97,8 @@ static int ledmode;
 #define LEDMODE_WIFIERR	5
 static unsigned int ledcount;
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 led_mode(int mode)
 {
 #ifdef USE_LED
@@ -157,7 +121,8 @@ led_mode(int mode)
 #endif
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 led_update(void)
 {
 #ifdef USE_LED
@@ -241,7 +206,8 @@ led_update(void)
 #endif
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 timerhandler(void *arg)
 {
 #ifdef USE_LED
@@ -249,53 +215,26 @@ timerhandler(void *arg)
 #endif
 }
 
-void ICACHE_FLASH_ATTR
-netout(void *cookie, char *buf, unsigned int len)
+ICACHE_FLASH_ATTR
+static void
+cmdlineputc(void *arg, char ch)
 {
-	struct client *client;
-
-	client = (struct client *)cookie;
-	fifo_write(&client->fifo_net, buf, len);
-}
-
-void ICACHE_FLASH_ATTR
-netout_flush(void *cookie)
-{
-	struct client *client;
-	char *p;
-	unsigned int l;
-	sint8 rc;
-
-	client = (struct client *)cookie;
-	if (fifo_len(&client->fifo_net) == 0)
-		return;
-
-	if (client->fifo_net_sending == 0) {
-		client->fifo_net_sending = 1;
-
-		p = fifo_getbulk(&client->fifo_net, &l);
-		rc = espconn_sent(client->espconn, p, l);
-		if (rc != ESPCONN_OK) {
-			syslog_send(LOG_DAEMON|LOG_DEBUG, "telnet: espconn_sent: error %d", rc);
-			espconn_disconnect(client->espconn);
-		}
+	if (arg == NULL) {
+		putchar(ch);
+	} else {
+		netout((struct netclient *)arg, &ch, 1);
+		netout_flush((struct netclient *)arg);
 	}
 }
 
-static void ICACHE_FLASH_ATTR
-cmdlineputc(void *arg, char ch)
-{
-	putchar(ch);
-}
-
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 recvTask(os_event_t *events)
 {
 	uint8_t i;
 
 	while (READ_PERI_REG(UART_STATUS(UART0)) & (UART_RXFIFO_CNT << UART_RXFIFO_CNT_S)) {
 		uint16 length;
-		uint16 nclients;
 
 		WRITE_PERI_REG(0x60000914, 0x73);	/* touch watchdog timer against below busy loop */
 		for (length = 0;
@@ -311,14 +250,7 @@ recvTask(os_event_t *events)
 			}
 
 		} else {
-			/* broadcast serial data to all telnet clients */
-			for (nclients = 0, i = 0; i < MAXCLIENT; i++) {
-				if (clients[i].espconn != NULL) {
-					netout(&clients[i], uartbuffer, length);
-					netout_flush(&clients[i]);
-					nclients++;
-				}
-			}
+			netout_broadcast_byport(uartbuffer, length, 23);
 		}
 
 //		led_update();
@@ -333,11 +265,12 @@ recvTask(os_event_t *events)
 	ETS_UART_INTR_ENABLE();
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 serverSentCb(void *arg)
 {
 	struct espconn *espconn;
-	struct client *client;
+	struct netclient *netclient;
 	char *p;
 	unsigned int l;
 	sint8 rc;
@@ -346,12 +279,12 @@ serverSentCb(void *arg)
 #ifdef NETDEBUG
 	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
 #endif
-	client = lookup_clientinstance(espconn);
+	netclient = netclient_lookup_by_espconn(espconn);
 
-	if (fifo_len(&client->fifo_net) == 0) {
-		client->fifo_net_sending = 0;
+	if (fifo_len(&netclient->fifo_net) == 0) {
+		netclient->fifo_net_sending = 0;
 	} else {
-		p = fifo_getbulk(&client->fifo_net, &l);
+		p = fifo_getbulk(&netclient->fifo_net, &l);
 		rc = espconn_sent(espconn, p, l);
 		if (rc != ESPCONN_OK) {
 			syslog_send(LOG_DAEMON|LOG_DEBUG, "telnet: espconn_sent(continuous): error %d", rc);
@@ -382,83 +315,55 @@ serverSentCb(void *arg)
 #endif
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 serverRecvCb(void *arg, char *data, unsigned short len)
 {
 	struct espconn *espconn;
-	struct client *client;
+	struct netclient *netclient;
 
 	espconn = (struct espconn *)arg;
 #ifdef NETDEBUG
 	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
 #endif
-	client = lookup_clientinstance(espconn);
-
-	if (client != NULL)
-		telnet_recv(&client->telnet, client, data, len);
+	netclient = netclient_lookup_by_espconn(espconn);
+	if (netclient != NULL)
+		telnet_recv(&netclient->telnet, netclient, data, len);
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 serverDisconnectCb(void *arg)
 {
 	/* arg of serverDisconnectCb() is not session's espconn, arg is serverConn */
-	struct espconn *espconn;
-	struct client *client;
-	int i;
-
-	espconn = NULL;
-	for (i = 0; i < MAXCLIENT; i++) {
-		if (clients[i].espconn == NULL)
-			continue;
-
-		if (clients[i].espconn->state == ESPCONN_NONE ||
-		    clients[i].espconn->state == ESPCONN_CLOSE) {
-			/* found disconnected espconn */
-			espconn = clients[i].espconn;
-
-#ifdef NETDEBUG
-			printf("%s:%d: %p\n", __func__, __LINE__, espconn);
-#endif
-			/* reap disconnected client info */
-			client = lookup_clientinstance(espconn);
-			if (client != NULL) {
-				syslog_send(LOG_DAEMON|LOG_INFO, "telnet: disconnect from %d.%d.%d.%d:%d",
-				    client->remote_ip[0],
-				    client->remote_ip[1],
-				    client->remote_ip[2],
-				    client->remote_ip[3],
-				    client->remote_port);
-				client->espconn = NULL;
-			}
-		}
-	}
+	netclient_espconn_reaper();
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 serverReconnectCb(void *arg, sint8 err)
 {
 	/* arg of serverReconnectCb() is not session's espconn */
 	syslog_send(LOG_DAEMON|LOG_ERR, "telnet: reconnect");
 }
 
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 serverConnectCb(void *arg)
 {
 	struct espconn *espconn;
-	struct client *client;
+	struct netclient *netclient;
 	static int once = 0;
 
 	espconn = (struct espconn *)arg;
 #ifdef NETDEBUG
 	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
 #endif
-	client = lookup_clientinstance(NULL);
-	if (client == NULL) {
+
+	netclient = netclient_connect_espconn(espconn);
+	if (netclient == NULL) {
 		espconn_disconnect(espconn);
 	} else {
-
-		client_init(client, espconn);
-
 		espconn_regist_recvcb(espconn, serverRecvCb);
 		espconn_regist_sentcb(espconn, serverSentCb);
 		espconn_regist_reconcb(espconn, serverReconnectCb);
@@ -474,7 +379,8 @@ serverConnectCb(void *arg)
 	}
 }
 
-const char * ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+const char *
 strflashsize(enum flash_size_map size)
 {
 	switch (size) {
@@ -497,7 +403,8 @@ strflashsize(enum flash_size_map size)
 	}
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 server_init(int port)
 {
 	serverConn.type = ESPCONN_TCP;
@@ -510,7 +417,8 @@ server_init(int port)
 	espconn_regist_time(&serverConn, SERVER_TIMEOUT, 0);
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 wifi_callback(System_Event_t *evt)
 {
 	switch (evt->event) {
@@ -613,7 +521,8 @@ wifi_callback(System_Event_t *evt)
 	}
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 gpio_setup()
 {
 	gpio_init();
@@ -635,7 +544,8 @@ gpio_setup()
 	gpio_output_set(BIT5, 0, BIT5, 0);
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 sntp_setup(void)
 {
 #ifdef USE_SNTP
@@ -657,7 +567,8 @@ sntp_setup(void)
 #endif /* USE_SNTP */
 }
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 user_init(void)
 {
 	const char *hostname, *p;

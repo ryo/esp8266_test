@@ -155,6 +155,5 @@ struct telnet {
 
 void telnet_init(struct telnet *);
 void telnet_recv(struct telnet *, void *, char *, unsigned int);
-void netout(void *, char *, unsigned int);
 
 #endif /* _TELNET_H_ */

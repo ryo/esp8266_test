@@ -6,7 +6,8 @@
 #undef FIFO_DEBUG
 
 #ifdef FIFO_DEBUG
-static void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+static void
 fifo_dump(struct fifo *fifo)
 {
 	unsigned int i;
@@ -26,13 +27,15 @@ fifo_dump(struct fifo *fifo)
 }
 #endif
 
-void ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+void
 fifo_init(struct fifo *fifo)
 {
 	memset(fifo, 0, sizeof(*fifo));
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 fifo_putc(struct fifo *fifo, char c)
 {
 	if (fifo->len >= FIFO_BUFSIZE)
@@ -45,7 +48,8 @@ fifo_putc(struct fifo *fifo, char c)
 	return 1;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 fifo_getc(struct fifo *fifo)
 {
 	int c;
@@ -67,7 +71,8 @@ fifo_getc(struct fifo *fifo)
 	return c;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 fifo_write(struct fifo *fifo, char *buf, unsigned int len)
 {
 	unsigned int left, i;
@@ -82,7 +87,8 @@ fifo_write(struct fifo *fifo, char *buf, unsigned int len)
 	return len;
 }
 
-int ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+int
 fifo_read(struct fifo *fifo, char *buf, unsigned int len)
 {
 	unsigned int fifolen, i;
@@ -97,7 +103,8 @@ fifo_read(struct fifo *fifo, char *buf, unsigned int len)
 	return len;
 }
 
-char * ICACHE_FLASH_ATTR
+ICACHE_FLASH_ATTR
+char *
 fifo_getbulk(struct fifo *fifo, unsigned int *lenp)
 {
 	unsigned int r;

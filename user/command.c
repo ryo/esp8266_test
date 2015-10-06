@@ -25,6 +25,7 @@ struct cmdtbl cmdtable[] = {
 	{	NULL,	NULL		}
 };
 
+ICACHE_FLASH_ATTR
 static int
 command_reboot(void *arg, int argc, char *argv[])
 {
@@ -32,7 +33,7 @@ command_reboot(void *arg, int argc, char *argv[])
 	return 0;
 }
 
-
+ICACHE_FLASH_ATTR
 static int
 command_d(void *arg, int argc, char *argv[])
 {
@@ -61,6 +62,7 @@ command_d(void *arg, int argc, char *argv[])
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 static int
 command_setenv(void *arg, int argc, char *argv[])
 {
@@ -81,6 +83,7 @@ command_setenv(void *arg, int argc, char *argv[])
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 static int
 command_printenv(void *arg, int argc, char *argv[])
 {
@@ -88,6 +91,7 @@ command_printenv(void *arg, int argc, char *argv[])
 	return 0;
 }
 
+ICACHE_FLASH_ATTR
 static int
 command_help(void *arg, int argc, char *argv[])
 {
