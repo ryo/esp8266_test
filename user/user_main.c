@@ -17,6 +17,8 @@
 #include "flashenv.h"
 #include "stdlib.h"
 #include "netclient.h"
+#include "led8x8.h"
+
 
 #undef NETDEBUG
 #undef PRINTFDEBUG
@@ -24,20 +26,40 @@
 #define USE_SNTP
 #define USE_SYSLOG
 #define USE_TIMER
-#define USE_LED
+#undef USE_LED
+#define USE_MATRIXLED_8x8
 
 #ifndef USE_SYSLOG
 #define syslog_init(x, y)
 #define syslog_send(...)
 #endif
 
+#define TCPPORT_TELNET	23
+#define TCPPORT_HTTP	80
+#define UDPPORT_LED	2525
+
+
 #define MAX_TXBUFFER	1024
 #define SERVER_TIMEOUT	300
 
-static struct espconn serverConn;
-static esp_tcp serverTcp;
+#define MAXTCPSERVERPORT	3
+static struct tcpserver {
+	esp_tcp serverTcp;
+	struct espconn serverConn;
+} tcpservers[MAXTCPSERVERPORT];
 
-#define	HZ	10
+#define MAXUDPSERVERPORT	3
+static struct udpserver {
+	esp_udp serverUdp;
+	struct espconn serverConn;
+} udpservers[MAXUDPSERVERPORT];
+
+
+#ifdef USE_MATRIXLED_8x8
+#define	HZ	500
+#else
+#define	HZ	20
+#endif
 static os_timer_t tick_timer;
 
 uint8 wifi_connected;
@@ -57,20 +79,20 @@ photorelay_ctrl(int sw, int onoff)
 		if (onoff)
 			gpio_output_set(BIT4, 0, BIT4, 0);
 		else
-			gpio_output_set(0, BIT4, 0, BIT4);
+			gpio_output_set(0, BIT4, BIT4, 0);
 	} else {
 		if (onoff)
 			gpio_output_set(BIT5, 0, BIT5, 0);
 		else
-			gpio_output_set(0, BIT5, 0, BIT5);
+			gpio_output_set(0, BIT5, BIT5, 0);
 	}
 }
 
+#ifdef USE_LED
 ICACHE_FLASH_ATTR
 static void
-led_set(int led0, int led1, int led2)
+led_set(int led0, int led1, int led2, int led3)
 {
-#ifdef USE_LED
 	if (led0)
 		gpio_output_set(BIT14, 0, BIT14, 0);
 	else
@@ -85,17 +107,25 @@ led_set(int led0, int led1, int led2)
 		gpio_output_set(BIT13, 0, BIT13, 0);
 	else
 		gpio_output_set(0, BIT13, BIT13, 0);
-#endif
-}
 
-static int ledmode;
+	if (led3)
+		gpio_output_set(BIT15, 0, BIT15, 0);
+	else
+		gpio_output_set(0, BIT15, BIT15, 0);
+}
+#endif /* USE_LED */
+
 #define LEDMODE_OFF	0
 #define LEDMODE_ON	1
 #define LEDMODE_BLINK	2
 #define LEDMODE_KITT	3
 #define LEDMODE_KITT2	4
 #define LEDMODE_WIFIERR	5
+
+#ifdef USE_LED
+static int ledmode;
 static unsigned int ledcount;
+#endif /* USE_LED */
 
 ICACHE_FLASH_ATTR
 void
@@ -106,10 +136,10 @@ led_mode(int mode)
 		ledmode = mode;
 		switch (ledmode) {
 		case LEDMODE_OFF:
-			led_set(1, 1, 1);
+			led_set(1, 1, 1, 1);
 			break;
 		case LEDMODE_ON:
-			led_set(1, 1, 1);
+			led_set(1, 1, 1, 1);
 			break;
 		case LEDMODE_BLINK:
 		case LEDMODE_KITT:
@@ -118,98 +148,132 @@ led_mode(int mode)
 			break;
 		}
 	}
-#endif
+#endif /* USE_LED */
 }
 
+#ifdef USE_LED
 ICACHE_FLASH_ATTR
 void
 led_update(void)
 {
-#ifdef USE_LED
 	switch (ledmode) {
 	case LEDMODE_OFF:
 	case LEDMODE_ON:
 		break;
 
 	case LEDMODE_KITT:
-		if (++ledcount >= 4)
+		if (++ledcount > 5)
 			ledcount = 0;
 
 		switch (ledcount) {
 		case 0:
-			led_set(0, 0, 1);
+			led_set(1, 0, 0, 0);
 			break;
 		case 1:
-			led_set(0, 1, 0);
+			led_set(0, 1, 0, 0);
 			break;
 		case 2:
-			led_set(1, 0, 0);
+			led_set(0, 0, 1, 0);
 			break;
 		case 3:
-			led_set(0, 1, 0);
+			led_set(0, 0, 0, 1);
+			break;
+		case 4:
+			led_set(0, 0, 1, 0);
+			break;
+		case 5:
+			led_set(0, 1, 0, 0);
 			break;
 		default:
-			led_set(0, 0, 0);
+			led_set(1, 1, 1, 1);
 			break;
 		}
 		break;
 
 	case LEDMODE_KITT2:
-		if (++ledcount >= 4)
+		if (++ledcount > 5)
 			ledcount = 0;
 
 		switch (ledcount) {
 		case 0:
-			led_set(1, 1, 0);
+			led_set(0, 1, 1, 1);
 			break;
 		case 1:
-			led_set(1, 0, 1);
+			led_set(1, 0, 1, 1);
 			break;
 		case 2:
-			led_set(0, 1, 1);
+			led_set(1, 1, 0, 1);
 			break;
 		case 3:
-			led_set(1, 0, 1);
+			led_set(1, 1, 1, 0);
+			break;
+		case 4:
+			led_set(1, 1, 0, 1);
+			break;
+		case 5:
+			led_set(1, 0, 1, 1);
 			break;
 		default:
-			led_set(1, 1, 1);
+			led_set(1, 1, 1, 1);
 			break;
 		}
 		break;
 
 	case LEDMODE_BLINK:
-		if (++ledcount >= 4)
+		if (++ledcount >= 8)
 			ledcount = 0;
 
-		switch (ledcount / 2) {
+		switch (ledcount / 4) {
 		case 0:
-			led_set(1, 1, 1);
+			led_set(1, 1, 1, 1);
 			break;
 		case 1:
 		default:
-			led_set(0, 0, 0);
+			led_set(0, 0, 0, 0);
 			break;
 		}
 		break;
 
 	case LEDMODE_WIFIERR:
 		ledcount++;
-		if (ledcount < HZ / 2) {
-			led_set(1, 0, 1);
-		} else if (ledcount < HZ) {
-			led_set(0, 1, 0);
+		if (ledcount < HZ) {
+			led_set(1, 0, 1, 0);
+		} else if (ledcount < HZ * 2) {
+			led_set(0, 1, 0, 1);
 		} else {
 			ledcount = 0;
 		}
 		break;
 	}
-#endif
+}
+#endif /* USE_LED */
+
+ICACHE_FLASH_ATTR
+void
+timer_10Hz(void)
+{
+	static int nsec = 0;
+
+	led8x8_num2(nsec);
+
+	nsec = (nsec + 1) % 100;
 }
 
 ICACHE_FLASH_ATTR
 void
 timerhandler(void *arg)
 {
+#ifdef USE_MATRIXLED_8x8
+	static int ntimerhandler = 0;
+
+	if (++ntimerhandler >= HZ / 10) {
+		ntimerhandler = 0;
+		timer_10Hz();
+	}
+
+	led8x8_update();
+
+#endif
 #ifdef USE_LED
 	led_update();
 #endif
@@ -248,14 +312,11 @@ recvTask(os_event_t *events)
 			for (i = 0; i < length; i++) {
 				commandline(&cmdline, uartbuffer[i], cmdtable, NULL);
 			}
-
 		} else {
-			netout_broadcast_byport(uartbuffer, length, 23);
+			netout_broadcast_byport(uartbuffer, length, TCPPORT_TELNET);
 		}
-
 //		led_update();
 	}
-
 
 	if (UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
 		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_FULL_INT_CLR);
@@ -327,8 +388,17 @@ serverRecvCb(void *arg, char *data, unsigned short len)
 	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
 #endif
 	netclient = netclient_lookup_by_espconn(espconn);
-	if (netclient != NULL)
-		telnet_recv(&netclient->telnet, netclient, data, len);
+	if (netclient != NULL) {
+		switch (netclient->local_port) {
+		case TCPPORT_TELNET:
+			telnet_recv(&netclient->telnet, netclient, data, len);
+			break;
+		case TCPPORT_HTTP:
+			xprintf(netclient, "%s:%d Hello\r\n", __func__, __LINE__);
+			netout_flush(netclient);
+			break;
+		}
+	}
 }
 
 ICACHE_FLASH_ATTR
@@ -380,6 +450,20 @@ serverConnectCb(void *arg)
 }
 
 ICACHE_FLASH_ATTR
+static void
+UdpRecvCb(void *arg, char *data, unsigned short len)
+{
+	struct espconn *espconn;
+
+	espconn = (struct espconn *)arg;
+#ifdef NETDEBUG
+	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
+#endif
+}
+
+
+
+ICACHE_FLASH_ATTR
 const char *
 strflashsize(enum flash_size_map size)
 {
@@ -404,17 +488,44 @@ strflashsize(enum flash_size_map size)
 }
 
 ICACHE_FLASH_ATTR
-void
-server_init(int port)
+int
+tcpserver_init(int port)
 {
-	serverConn.type = ESPCONN_TCP;
-	serverConn.state = ESPCONN_NONE;
-	serverTcp.local_port = port;
-	serverConn.proto.tcp = &serverTcp;
+	static int ntcpserv = 0;
 
-	espconn_regist_connectcb(&serverConn, serverConnectCb);
-	espconn_accept(&serverConn);
-	espconn_regist_time(&serverConn, SERVER_TIMEOUT, 0);
+	if (ntcpserv >= MAXTCPSERVERPORT)
+		return -1;
+
+	tcpservers[ntcpserv].serverConn.type = ESPCONN_TCP;
+	tcpservers[ntcpserv].serverConn.state = ESPCONN_NONE;
+	tcpservers[ntcpserv].serverTcp.local_port = port;
+	tcpservers[ntcpserv].serverConn.proto.tcp = &tcpservers[ntcpserv].serverTcp;
+
+	espconn_regist_connectcb(&tcpservers[ntcpserv].serverConn, serverConnectCb);
+	espconn_accept(&tcpservers[ntcpserv].serverConn);
+	espconn_regist_time(&tcpservers[ntcpserv].serverConn, SERVER_TIMEOUT, 0);
+
+	ntcpserv++;
+}
+
+ICACHE_FLASH_ATTR
+int
+udpserver_init(int port)
+{
+	static int nudpserv = 0;
+
+	if (nudpserv >= MAXUDPSERVERPORT)
+		return -1;
+
+	udpservers[nudpserv].serverConn.type = ESPCONN_UDP;
+	udpservers[nudpserv].serverConn.state = ESPCONN_NONE;
+	udpservers[nudpserv].serverUdp.local_port = port;
+	udpservers[nudpserv].serverConn.proto.udp = &udpservers[nudpserv].serverUdp;
+
+	espconn_regist_recvcb(&udpservers[nudpserv].serverConn, UdpRecvCb);
+
+
+	nudpserv++;
 }
 
 ICACHE_FLASH_ATTR
@@ -527,14 +638,17 @@ gpio_setup()
 {
 	gpio_init();
 
-#ifdef USE_LED
+#if defined(USE_LED) || defined(USE_MATRIXLED_8x8)
 	/* for LED */
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTCK_U, FUNC_GPIO13);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTMS_U, FUNC_GPIO14);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15);
+
 	gpio_output_set(BIT12, 0, BIT12, 0);
 	gpio_output_set(BIT13, 0, BIT13, 0);
 	gpio_output_set(BIT14, 0, BIT14, 0);
+	gpio_output_set(BIT15, 0, BIT15, 0);
 #endif
 
 	/* for PhotoRelay Switch */
@@ -589,7 +703,7 @@ user_init(void)
 	/* GPIO, LED */
 	gpio_setup();
 #ifdef USE_LED
-	led_set(1, 1, 1);
+	led_set(1, 1, 1, 1);
 	led_mode(LEDMODE_BLINK);
 #endif
 
@@ -619,7 +733,8 @@ user_init(void)
 
 
 	/* network */
-	server_init(23);
+	tcpserver_init(TCPPORT_TELNET);
+	tcpserver_init(TCPPORT_HTTP);
 	if ((p = flashenv_getenv("SYSLOG")) != NULL)
 		syslog_init(p, hostname);
 	sntp_setup();
