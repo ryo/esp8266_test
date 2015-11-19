@@ -82,11 +82,8 @@ spi_intr(void *arg)
 
 		gpio_set(GPIO_RCLK, 1);
 
-		row = nintr & 7;
+		row = ++nintr & 7;
 		spi_write((0x8000 >> row) | led_matrix[row], 16);
-
-		nintr++;
-
 
 	} else if (READ_PERI_REG(0x3ff00020) & BIT9) {
 		/* I2S interrupt */
@@ -98,6 +95,7 @@ ICACHE_FLASH_ATTR
 void
 spi_init(void)
 {
+	/* GPIO13,14,15 are HSPI mode */
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDI_U, 2);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTCK_U, 2);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTMS_U, 2);
@@ -110,11 +108,15 @@ spi_init(void)
 	    SPI_CS_SETUP |
 	    SPI_CS_HOLD);
 
+#define CLKDIV_N	1
+#define CLKDIV_H	(((CLKDIV_N + 1) / 2) - 1)
+#define CLKDIV_L	CLKDIV_N
+
 	WRITE_PERI_REG(SPI_CLOCK(HSPI), 
-	    ((0 & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
-	    ((3 & SPI_CLKCNT_N) << SPI_CLKCNT_N_S) |
-	    ((1 & SPI_CLKCNT_H) << SPI_CLKCNT_H_S) |
-	    ((3 & SPI_CLKCNT_L) << SPI_CLKCNT_L_S));
+	    ((500 & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
+	    ((CLKDIV_N & SPI_CLKCNT_N) << SPI_CLKCNT_N_S) |
+	    ((CLKDIV_H & SPI_CLKCNT_H) << SPI_CLKCNT_H_S) |
+	    ((CLKDIV_L & SPI_CLKCNT_L) << SPI_CLKCNT_L_S));
 
 	/* set master mode, enable trans done interrupt */
 	WRITE_PERI_REG(SPI_SLAVE(HSPI),
@@ -150,6 +152,8 @@ ICACHE_FLASH_ATTR
 void
 spi_start(void)
 {
-	spi_write(0x0000, 16);
-}
+	/* start spi transfer */
+	spi_write(0x8000 | led_matrix[0], 16);
 
+	/* continued by interrupt chain */
+}
