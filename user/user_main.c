@@ -18,6 +18,7 @@
 #include "stdlib.h"
 #include "netclient.h"
 #include "led8x8.h"
+#include "spi_led8x8.h"
 
 
 #undef NETDEBUG
@@ -25,9 +26,10 @@
 
 #define USE_SNTP
 #define USE_SYSLOG
-#define USE_TIMER
+#undef USE_TIMER
 #undef USE_LED
-#define USE_MATRIXLED_8x8
+#undef USE_MATRIXLED_8x8
+#define USE_SPI_LEDCTRL
 
 #ifndef USE_SYSLOG
 #define syslog_init(x, y)
@@ -248,6 +250,7 @@ led_update(void)
 }
 #endif /* USE_LED */
 
+#ifdef USE_TIMER
 ICACHE_FLASH_ATTR
 void
 timer_10Hz(void)
@@ -278,6 +281,7 @@ timerhandler(void *arg)
 	led_update();
 #endif
 }
+#endif /* USE_TIMER */
 
 ICACHE_FLASH_ATTR
 static void
@@ -456,9 +460,11 @@ UdpRecvCb(void *arg, char *data, unsigned short len)
 	struct espconn *espconn;
 
 	espconn = (struct espconn *)arg;
-#ifdef NETDEBUG
+
+
+//#ifdef NETDEBUG
 	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
-#endif
+//#endif
 }
 
 
@@ -738,6 +744,12 @@ user_init(void)
 	if ((p = flashenv_getenv("SYSLOG")) != NULL)
 		syslog_init(p, hostname);
 	sntp_setup();
+
+
+#ifdef USE_SPI_LEDCTRL
+	spi_init();
+	spi_start();
+#endif
 
 
 #ifdef USE_TIMER

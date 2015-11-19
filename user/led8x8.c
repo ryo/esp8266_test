@@ -257,7 +257,7 @@ led8x8_update(void)
 	led_count++;
 	row = (led_count & 7);
 
-	RCLK_SET(1);
+	RCLK_SET(0);
 
 	for (i = 0; i < 8; i++) {
 		SI_SET(led_matrix[row] & (0x80 >> i));
@@ -271,6 +271,5 @@ led8x8_update(void)
 		SCLK_SET(0);
 	}
 
-	SI_SET(0);
-	RCLK_SET(0);
+	RCLK_SET(1);
 }
