@@ -96,7 +96,7 @@ spi_init(void)
 #define CLKDIV_L	CLKDIV_N
 
 	WRITE_PERI_REG(SPI_CLOCK(HSPI), 
-	    ((500 & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
+	    ((1000 & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
 	    ((CLKDIV_N & SPI_CLKCNT_N) << SPI_CLKCNT_N_S) |
 	    ((CLKDIV_H & SPI_CLKCNT_H) << SPI_CLKCNT_H_S) |
 	    ((CLKDIV_L & SPI_CLKCNT_L) << SPI_CLKCNT_L_S));
@@ -136,7 +136,7 @@ void
 spi_start(void)
 {
 	/* start spi transfer */
-	spi_write(0x8000 | led_matrix[0], 16);
+	spi_write(0, 16);
 
 	/* continued by interrupt chain */
 }
