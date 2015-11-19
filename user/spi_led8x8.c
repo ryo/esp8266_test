@@ -7,29 +7,12 @@
 #include "printf.h"
 #include "gpio.h"
 
+#include "led8x8.h"
 #include "spi_led8x8.h"
 
 #define GPIO_SI			BIT13
 #define GPIO_SCLK		BIT14
 #define GPIO_RCLK		BIT15
-
-static unsigned char led_matrix[8] = {
-	0x3c,
-	0x42,
-	0x81,
-	0xa5,
-	0x81,
-	0xbd,
-	0x42,
-	0x3c
-};
-
-void
-spi_led8x8_setpattern(unsigned char data[8])
-{
-	memcpy(led_matrix, data, 8);
-}
-
 
 ICACHE_FLASH_ATTR
 static void

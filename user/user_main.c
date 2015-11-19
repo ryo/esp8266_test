@@ -26,7 +26,7 @@
 
 #define USE_SNTP
 #define USE_SYSLOG
-#undef USE_TIMER
+#define USE_TIMER
 #undef USE_LED
 #undef USE_MATRIXLED_8x8
 #define USE_SPI_LEDCTRL
@@ -266,20 +266,18 @@ ICACHE_FLASH_ATTR
 void
 timerhandler(void *arg)
 {
-#ifdef USE_MATRIXLED_8x8
 	static int ntimerhandler = 0;
+#ifdef USE_MATRIXLED_8x8
+	led8x8_update();
+#endif
+#ifdef USE_LED
+	led_update();
+#endif
 
 	if (++ntimerhandler >= HZ / 10) {
 		ntimerhandler = 0;
 		timer_10Hz();
 	}
-
-	led8x8_update();
-
-#endif
-#ifdef USE_LED
-	led_update();
-#endif
 }
 #endif /* USE_TIMER */
 
