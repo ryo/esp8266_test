@@ -26,7 +26,7 @@
 
 #define USE_SNTP
 #define USE_SYSLOG
-#define USE_TIMER
+#undef USE_TIMER
 #undef USE_LED
 #undef USE_MATRIXLED_8x8
 #define USE_SPI_LEDCTRL
@@ -274,7 +274,8 @@ timerhandler(void *arg)
 	led_update();
 #endif
 
-	if (++ntimerhandler >= HZ / 10) {
+//	if (++ntimerhandler >= HZ / 10) {
+	if (++ntimerhandler >= HZ) {
 		ntimerhandler = 0;
 		timer_10Hz();
 	}
@@ -330,7 +331,7 @@ recvTask(os_event_t *events)
 
 ICACHE_FLASH_ATTR
 static void
-serverSentCb(void *arg)
+tcp_sentcb(void *arg)
 {
 	struct espconn *espconn;
 	struct netclient *netclient;
@@ -380,7 +381,7 @@ serverSentCb(void *arg)
 
 ICACHE_FLASH_ATTR
 static void
-serverRecvCb(void *arg, char *data, unsigned short len)
+tcp_recvcb(void *arg, char *data, unsigned short len)
 {
 	struct espconn *espconn;
 	struct netclient *netclient;
@@ -405,23 +406,23 @@ serverRecvCb(void *arg, char *data, unsigned short len)
 
 ICACHE_FLASH_ATTR
 static void
-serverDisconnectCb(void *arg)
+tcp_disconnectcb(void *arg)
 {
-	/* arg of serverDisconnectCb() is not session's espconn, arg is serverConn */
+	/* arg of tcp_disconnectcb() is not session's espconn, arg is serverConn */
 	netclient_espconn_reaper();
 }
 
 ICACHE_FLASH_ATTR
 static void
-serverReconnectCb(void *arg, sint8 err)
+tcp_reconnectcb(void *arg, sint8 err)
 {
-	/* arg of serverReconnectCb() is not session's espconn */
+	/* arg of tcp_reconnectcb() is not session's espconn */
 	syslog_send(LOG_DAEMON|LOG_ERR, "telnet: reconnect");
 }
 
 ICACHE_FLASH_ATTR
 static void
-serverConnectCb(void *arg)
+tcp_connectcb(void *arg)
 {
 	struct espconn *espconn;
 	struct netclient *netclient;
@@ -436,10 +437,10 @@ serverConnectCb(void *arg)
 	if (netclient == NULL) {
 		espconn_disconnect(espconn);
 	} else {
-		espconn_regist_recvcb(espconn, serverRecvCb);
-		espconn_regist_sentcb(espconn, serverSentCb);
-		espconn_regist_reconcb(espconn, serverReconnectCb);
-		espconn_regist_disconcb(espconn, serverDisconnectCb);
+		espconn_regist_recvcb(espconn, tcp_recvcb);
+		espconn_regist_sentcb(espconn, tcp_sentcb);
+		espconn_regist_reconcb(espconn, tcp_reconnectcb);
+		espconn_regist_disconcb(espconn, tcp_disconnectcb);
 
 		syslog_send(LOG_DAEMON|LOG_INFO, "telnet: connection from %d.%d.%d.%d:%d",
 		    espconn->proto.tcp->remote_ip[0],
@@ -453,16 +454,17 @@ serverConnectCb(void *arg)
 
 ICACHE_FLASH_ATTR
 static void
-UdpRecvCb(void *arg, char *data, unsigned short len)
+udp_recvcb(void *arg, char *data, unsigned short len)
 {
 	struct espconn *espconn;
 
 	espconn = (struct espconn *)arg;
 
-
-//#ifdef NETDEBUG
-	printf("%s:%d: %p\n", __func__, __LINE__, espconn);
-//#endif
+	if (espconn->proto.udp->local_port == UDPPORT_LED) {
+		if (len == 8) {
+			led8x8_setpattern(data);
+		}
+	}
 }
 
 
@@ -505,7 +507,7 @@ tcpserver_init(int port)
 	tcpservers[ntcpserv].serverTcp.local_port = port;
 	tcpservers[ntcpserv].serverConn.proto.tcp = &tcpservers[ntcpserv].serverTcp;
 
-	espconn_regist_connectcb(&tcpservers[ntcpserv].serverConn, serverConnectCb);
+	espconn_regist_connectcb(&tcpservers[ntcpserv].serverConn, tcp_connectcb);
 	espconn_accept(&tcpservers[ntcpserv].serverConn);
 	espconn_regist_time(&tcpservers[ntcpserv].serverConn, SERVER_TIMEOUT, 0);
 
@@ -526,8 +528,9 @@ udpserver_init(int port)
 	udpservers[nudpserv].serverUdp.local_port = port;
 	udpservers[nudpserv].serverConn.proto.udp = &udpservers[nudpserv].serverUdp;
 
-	espconn_regist_recvcb(&udpservers[nudpserv].serverConn, UdpRecvCb);
-
+	if (espconn_create(&udpservers[nudpserv].serverConn) == 0) {
+		espconn_regist_recvcb(&udpservers[nudpserv].serverConn, udp_recvcb);
+	}
 
 	nudpserv++;
 }
@@ -739,6 +742,8 @@ user_init(void)
 	/* network */
 	tcpserver_init(TCPPORT_TELNET);
 	tcpserver_init(TCPPORT_HTTP);
+	udpserver_init(UDPPORT_LED);
+
 	if ((p = flashenv_getenv("SYSLOG")) != NULL)
 		syslog_init(p, hostname);
 	sntp_setup();

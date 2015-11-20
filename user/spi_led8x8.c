@@ -10,9 +10,13 @@
 #include "led8x8.h"
 #include "spi_led8x8.h"
 
-#define GPIO_SI			BIT13
-#define GPIO_SCLK		BIT14
-#define GPIO_RCLK		BIT15
+#define GPIO_SI		BIT13
+#define GPIO_SCLK	BIT14
+#define GPIO_RCLK	BIT15
+
+#define SPI	0
+#define HSPI	1
+
 
 ICACHE_FLASH_ATTR
 static void
@@ -24,8 +28,7 @@ gpio_set(int gpio, int on)
 		gpio_output_set(0, gpio, gpio, 0);
 }
 
-#define SPI	0
-#define HSPI	1
+static int spi_intr_continuous = 0;
 
 ICACHE_FLASH_ATTR
 static void
@@ -33,7 +36,6 @@ spi_intr(void *arg)
 {
 	static int nintr = 0;
 	int row;
-	uint32 reg;
 
 	if (READ_PERI_REG(0x3ff00020) & BIT4) {
 		/* SPI interrupt */
@@ -42,14 +44,18 @@ spi_intr(void *arg)
 	} else if (READ_PERI_REG(0x3ff00020) & BIT7) {
 		/* HSPI interrupt */
 
-		reg = READ_PERI_REG(SPI_SLAVE(HSPI));
+		/* set latch */
+		gpio_set(GPIO_RCLK, 1);
+
+		(void)READ_PERI_REG(SPI_SLAVE(HSPI));
 		CLEAR_PERI_REG_MASK(SPI_SLAVE(HSPI),
 		    SPI_TRANS_DONE_EN |
 		    SPI_SLV_WR_STA_DONE_EN |
 		    SPI_SLV_RD_STA_DONE_EN |
 		    SPI_SLV_WR_BUF_DONE_EN |
 		    SPI_SLV_RD_BUF_DONE_EN);
-		SET_PERI_REG_MASK(SPI_SLAVE(HSPI), SPI_SYNC_RESET);
+		SET_PERI_REG_MASK(SPI_SLAVE(HSPI),
+		    SPI_SYNC_RESET);
 		CLEAR_PERI_REG_MASK(SPI_SLAVE(HSPI),
 		    SPI_TRANS_DONE |
 		    SPI_SLV_WR_STA_DONE |
@@ -63,10 +69,11 @@ spi_intr(void *arg)
 		    SPI_SLV_WR_BUF_DONE_EN |
 		    SPI_SLV_RD_BUF_DONE_EN);
 
-		gpio_set(GPIO_RCLK, 1);
 
-		row = ++nintr & 7;
-		spi_write((0x8000 >> row) | led_matrix[row], 16);
+		if (spi_intr_continuous) {
+			row = ++nintr & 7;
+			spi_write((0x8000 >> row) | led_matrix[row], 16);
+		}
 
 	} else if (READ_PERI_REG(0x3ff00020) & BIT9) {
 		/* I2S interrupt */
@@ -91,12 +98,12 @@ spi_init(void)
 	    SPI_CS_SETUP |
 	    SPI_CS_HOLD);
 
-#define CLKDIV_N	1
+#define CLKDIV_N	3
 #define CLKDIV_H	(((CLKDIV_N + 1) / 2) - 1)
 #define CLKDIV_L	CLKDIV_N
 
 	WRITE_PERI_REG(SPI_CLOCK(HSPI), 
-	    ((1000 & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
+	    ((500 & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
 	    ((CLKDIV_N & SPI_CLKCNT_N) << SPI_CLKCNT_N_S) |
 	    ((CLKDIV_H & SPI_CLKCNT_H) << SPI_CLKCNT_H_S) |
 	    ((CLKDIV_L & SPI_CLKCNT_L) << SPI_CLKCNT_L_S));
@@ -125,6 +132,7 @@ spi_write(uint32_t data, int bitlen)
 	    (((bitlen - 1) & SPI_USR_COMMAND_BITLEN) << SPI_USR_COMMAND_BITLEN_S) |
 	    ((uint32)data));
 
+	/* clear latch */
 	gpio_set(GPIO_RCLK, 0);
 
 	/* trigger */
@@ -136,7 +144,14 @@ void
 spi_start(void)
 {
 	/* start spi transfer */
+	spi_intr_continuous = 1;
 	spi_write(0, 16);
-
 	/* continued by interrupt chain */
+}
+
+ICACHE_FLASH_ATTR
+void
+spi_stop(void)
+{
+	spi_intr_continuous = 0;
 }

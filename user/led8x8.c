@@ -177,7 +177,7 @@ static unsigned char num_pattern[10][8] = {
 };
 
 unsigned char led_matrix[8] = {
-#if 0
+#if 1
 	0x3c,
 	0x42,
 	0x81,
@@ -187,7 +187,7 @@ unsigned char led_matrix[8] = {
 	0x42,
 	0x3c
 #endif
-#if 1
+#if 0
 	0x80,
 	0x40,
 	0x20,
